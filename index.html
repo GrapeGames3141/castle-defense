@@ -1,0 +1,3531 @@
+<!--
+============================================================================================
+BASTION OF THE FOUR ROADS : COMPLETE AI BLUEPRINT, ARCHITECTURE & HOW-TO-PLAY SPECIFICATION
+============================================================================================
+
+1. OVERVIEW & CORE CONCEPT
+==========================
+"Bastion of the Four Roads" is a 2.5D isometric tactical lane-defense game built inside a
+single self-contained HTML5 file for mobile touchscreens and desktop browsers.
+* A fortified medieval stone Castle Keep sits on an island in the center of the map.
+* A circular blue water Moat surrounds the central Castle island.
+* Four diagonal cobblestone Roads arranged in an X-cross pattern (0: NW Top-Left,
+  1: NE Top-Right, 2: SW Bottom-Left, 3: SE Bottom-Right) connect the outer forest edges
+  to the central Castle across four 2.5D arched stone bridges.
+* Each of the 4 Castle Corner Towers is physically and visually connected to its specific
+  bridge entrance via a fortified stone rampart causeway and directional arrow-slits.
+
+2. INITIAL STATE & LANE-FIRST DEPLOYMENT CONTROLS
+=================================================
+* Clean Battlefield Start: The game loads immediately on Frame 1 with the Castle, circular
+  Moat, 4 arched bridges, and forest scenery visible, and ZERO pre-placed units or arrows.
+  Wave 1 includes a 4.0-second grace period so the player can select a lane and deploy first.
+* Select Lane -> Place Unit Workflow (Remembers Last Selected Lane):
+  1) Click/tap any of the 4 lanes (its cyan "TAP TO DEPLOY" ring, bridge, road, or corner
+     tower) or press keys [1], [2], [3], [4] to select that lane (`selectedLane`, defaults
+     to 0 / NW).
+  2) Click the bottom-left ARCHER button (Cost: 50g, 1.5s) or bottom-right SWORDSMAN button
+     (Cost: 75g, 3.0s) or press [Z] / [X] / [Space] to immediately start deploying to the
+     LAST SELECTED LANE.
+  3) Clicking a unit button again automatically reuses that same selected lane without
+     requiring the player to re-select the lane.
+* One-at-a-Time Holographic Deployment Lock:
+  Only ONE unit across the entire battlefield can be deploying at any moment. While a unit
+  is deploying, a translucent cyan holographic ghost silhouette with a radial progress ring
+  and floating countdown timer ("1.5s" or "3.0s") renders at the target lane, synchronized
+  with the top-center deployment progress bar.
+
+3. STRICT SINGLE-LANE ARCHER TARGETING & UNIT COUNTERPLAY
+=========================================================
+* ARCHER (Cost: 50g | Deploy Time: 1.5s | Max 3 per Corner Tower | 20 Arrows Quiver):
+  * Stations atop the Castle Corner Tower directly connected to the selected lane.
+  * STRICT SINGLE-LANE TARGETING RULE: An Archer stationed on Tower X (`laneIdx`) can ONLY
+    acquire and fire at enemies advancing on Lane X (`enemy.lane === laneIdx`). Archers
+    NEVER fire across lanes. In-flight arrows are also strictly bound to `arrow.lane`.
+  * Selecting a lane displays an animated dashed cyan/gold firing corridor from its corner
+    tower down its connected bridge and road up to maximum archer range.
+* SWORDSMAN (Cost: 75g | Deploy Time: 3.0s | HP: 135 | Melee Damage: 22):
+  * Spawns at the castle gate of the selected lane, marches onto the arched moat bridge to
+    a defensive guard post (`dist = 0.34`), blocks advancing enemies on that lane in melee
+    combat, and shatters enemy shields on contact (`enemy.arrowResist = 0`).
+
+4. ENEMY ARCHETYPES, WAVES & GOLD ECONOMY
+=========================================
+* Starting Gold: 200g | Passive Castle Income: +4g/sec | Wave Clear Bonus: +75g + Castle Heal
+* Enemy Types (20 Escalating Waves):
+  1) GOBLIN SCOUT (Bounty: +25g): Fast green runner, low HP, no arrow resistance.
+  2) SHIELD ORC (Bounty: +45g): Armored warrior carrying a heavy iron shield that blocks
+     75% of arrow damage (`arrowResist = 0.75`) until a Swordsman strikes it in melee,
+     permanently breaking the shield (`SHIELD BROKEN!`).
+  3) SIEGE OGRE (Bounty: +80g): Massive red-brown brute with high HP and heavy castle damage.
+
+5. ONE-TIME-LOAD LOCAL STORAGE PERSISTENCE
+==========================================
+* Storage Key: `bastion_four_roads_save_v2`
+* Hydrates once when the application boots (`loadStateOnce()`), wrapped in strict `try/catch`
+  and schema bounds validation so corrupted data never prevents loading.
+* Automatically saves on unit deployments, wave completions, and when pausing.
+
+6. QUICK-PAUSE WORKPLACE READER & KEYTRAINSECURE.COM PORTAL
+===========================================================
+* Instant Triggers: Press [P], [Escape], Backtick [`], click the top-right "PAUSE / TECH BRIEF"
+  button, or perform a 2-finger tap anywhere on mobile.
+* Behavior: Freezes simulation, silences Web Audio synthesis, saves state to `localStorage`,
+  updates `document.title` to "KeyTrain - Enterprise Cybersecurity & Threat Intelligence Briefs",
+  and displays an ad-free professional reader featuring cybersecurity briefs on KeyTrain LLC's
+  ecosystem (Halo, RailNet, HOOKeD, CompTIA Security+ SY0-701), direct links and an optional
+  instant-redirect toggle to https://keytrainsecure.com, an interactive Concept Art reference
+  canvas, and this complete copyable AI Specification.
+============================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bastion of the Four Roads</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1e3a1a;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            touch-action: none;
+        }
+        .font-cartoon {
+            font-family: 'Trebuchet MS', 'Arial Rounded MT Bold', 'Segoe UI', sans-serif;
+            font-weight: 900;
+            letter-spacing: 0.03em;
+            text-shadow:
+                -2px -2px 0 #111827,
+                 2px -2px 0 #111827,
+                -2px  2px 0 #111827,
+                 2px  2px 0 #111827,
+                 0px  3px 0 #000000;
+        }
+        .font-cartoon-sm {
+            font-family: 'Trebuchet MS', 'Arial Rounded MT Bold', 'Segoe UI', sans-serif;
+            font-weight: 800;
+            text-shadow:
+                -1.5px -1.5px 0 #111827,
+                 1.5px -1.5px 0 #111827,
+                -1.5px  1.5px 0 #111827,
+                 1.5px  1.5px 0 #111827,
+                 0px    2px   0 #000000;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: pointer;
+        }
+        .hud-pill {
+            background: linear-gradient(180deg, #4b5563 0%, #374151 55%, #1f2937 100%);
+            border: 3px solid #111827;
+            box-shadow: 0 5px 0 rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.22);
+            border-radius: 14px;
+        }
+        .unit-card {
+            background: linear-gradient(180deg, #38bdf8 0%, #0284c7 52%, #0369a1 100%);
+            border: 3.5px solid #f59e0b;
+            outline: 3px solid #111827;
+            border-radius: 18px;
+            box-shadow:
+                0 6px 0 #b45309,
+                0 9px 16px rgba(0,0,0,0.55),
+                inset 0 3px 0 rgba(255,255,255,0.45);
+            transition: transform 0.08s ease, filter 0.12s ease;
+            cursor: pointer;
+        }
+        .unit-card:hover:not(:disabled) {
+            filter: brightness(1.07);
+        }
+        .unit-card:active:not(:disabled) {
+            transform: translateY(3px);
+            box-shadow:
+                0 3px 0 #b45309,
+                0 4px 8px rgba(0,0,0,0.5),
+                inset 0 2px 0 rgba(255,255,255,0.4);
+        }
+        .unit-card.locked-card {
+            filter: saturate(0.45) brightness(0.78);
+            cursor: not-allowed;
+        }
+        .unit-icon-box {
+            background: linear-gradient(180deg, #0c4a6e 0%, #082f49 100%);
+            border: 2.5px solid #38bdf8;
+            border-radius: 12px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.65);
+        }
+        .reader-scroll {
+            user-select: text;
+            -webkit-user-select: text;
+            touch-action: pan-y;
+        }
+        @keyframes goldPop {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.13); }
+        }
+        .gold-pulse {
+            animation: goldPop 0.28s ease-out;
+        }
+    </style>
+</head>
+<body class="relative select-none overflow-hidden">
+
+    <!-- FULLSCREEN 2.5D ISOMETRIC BATTLEFIELD CANVAS -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- TOP HUD OVERLAY (MATCHING CONCEPT ART + QUICK CONTROLS) -->
+    <div class="fixed top-0 left-0 right-0 z-20 pointer-events-none p-2 sm:p-3 flex flex-col gap-1.5">
+        <div class="w-full max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+
+            <!-- TOP-LEFT: HEART + CASTLE HP BAR -->
+            <div class="hud-pill px-2.5 py-1.5 flex items-center gap-2 pointer-events-auto min-w-[190px] sm:min-w-[230px]">
+                <div class="relative -ml-1 flex-shrink-0">
+                    <svg class="w-8 h-8 sm:w-9 sm:h-9 drop-shadow" viewBox="0 0 36 36">
+                        <path d="M18 32 C18 32 4 23 4 12 C4 6.5 8.5 3 13 3 C15.8 3 17.3 4.5 18 6 C18.7 4.5 20.2 3 23 3 C27.5 3 32 6.5 32 12 C32 23 18 32 18 32 Z"
+                              fill="#ef4444" stroke="#111827" stroke-width="2.6"/>
+                        <path d="M9 10 C9 7.8 11 6.5 13 6.5" stroke="#fca5a5" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+                    </svg>
+                </div>
+                <div class="relative flex-1 h-6 sm:h-7 bg-slate-950 rounded-lg border-2 border-slate-900 overflow-hidden">
+                    <div id="castleHpBar" class="h-full transition-all duration-200"
+                         style="width: 100%; background: linear-gradient(180deg, #f87171 0%, #dc2626 55%, #991b1b 100%);"></div>
+                    <div class="absolute inset-0 flex items-center justify-center font-cartoon text-white text-xs sm:text-sm tracking-wide">
+                        CASTLE HP: <span id="castleHpText" class="ml-1">100%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TOP-CENTER: ONE-AT-A-TIME DEPLOYMENT / WAVE STATUS BAR -->
+            <div class="hud-pill px-2.5 py-1.5 hidden lg:flex items-center flex-1 min-w-[170px] max-w-[380px] pointer-events-auto">
+                <div class="relative w-full h-6 sm:h-7 bg-slate-950 rounded-lg border-2 border-slate-900 overflow-hidden">
+                    <div id="centerStatusBar" class="h-full transition-all duration-75"
+                         style="width: 100%; background: linear-gradient(180deg, #f87171 0%, #dc2626 55%, #991b1b 100%);"></div>
+                    <div id="centerStatusText" class="absolute inset-0 flex items-center justify-center font-cartoon-sm text-white text-xs sm:text-sm tracking-wider px-2 truncate">
+                        LANE 1 (NW) SELECTED • READY
+                    </div>
+                </div>
+            </div>
+
+            <!-- TOP-RIGHT: GOLD BAG + WAVE COUNTER + RESET + QUICK PAUSE READER -->
+            <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+                <!-- Gold Pill -->
+                <div id="goldBadge" class="hud-pill px-2.5 sm:px-3.5 py-1.5 flex items-center gap-1.5">
+                    <svg class="w-6 h-6 sm:w-7 sm:h-7 flex-shrink-0" viewBox="0 0 32 32">
+                        <path d="M12 6 L20 6 L18 10 L14 10 Z" fill="#d97706" stroke="#111827" stroke-width="2"/>
+                        <path d="M9 12 C6 15 5 22 8 26 C10 28.5 22 28.5 24 26 C27 22 26 15 23 12 C21 10 11 10 9 12 Z"
+                              fill="#b45309" stroke="#111827" stroke-width="2.2"/>
+                        <circle cx="16" cy="20" r="4.5" fill="#fbbf24" stroke="#111827" stroke-width="1.6"/>
+                    </svg>
+                    <span class="font-cartoon text-amber-300 text-xs sm:text-base">
+                        GOLD: <span id="goldText" class="text-white">200</span>
+                    </span>
+                </div>
+
+                <!-- Wave Pill -->
+                <div class="hud-pill px-2.5 sm:px-3.5 py-1.5 flex items-center">
+                    <span class="font-cartoon text-white text-xs sm:text-base">
+                        WAVE <span id="waveText" class="text-amber-300">1</span> / 20
+                    </span>
+                </div>
+
+                <!-- Sound Toggle -->
+                <button id="muteBtn" onclick="toggleAudioMute()" title="Toggle Sound Effects"
+                        class="hud-pill px-2.5 py-1.5 text-white hover:text-amber-300 active:translate-y-0.5 text-xs sm:text-sm font-cartoon-sm">
+                    <span id="muteLabel">SFX ON</span>
+                </button>
+
+                <!-- Reset Battle Button -->
+                <button onclick="resetNewBattle()" title="Start Fresh Battle"
+                        class="hud-pill px-2.5 py-1.5 text-rose-300 hover:text-white active:translate-y-0.5 text-xs sm:text-sm font-cartoon-sm">
+                    RESET
+                </button>
+
+                <!-- Quick-Pause / Workplace Tech Reader Trigger -->
+                <button onclick="openWorkplaceReader()" title="Quick Pause & Open KeyTrainSecure.com Tech Briefs (P / Esc / `)"
+                        class="hud-pill px-2.5 sm:px-3 py-1.5 bg-sky-900 border-sky-400 text-sky-200 hover:text-white active:translate-y-0.5 flex items-center gap-1 text-xs sm:text-sm font-cartoon-sm">
+                    <span>PAUSE [P]</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- BOTTOM TACTICAL DEPLOYMENT CARDS (ONE-CLICK DEPLOY TO LAST SELECTED LANE) -->
+    <div class="fixed bottom-0 left-0 right-0 z-20 pointer-events-none p-2.5 sm:p-4 flex items-end justify-between">
+
+        <!-- BOTTOM-LEFT: ARCHER DEPLOYMENT CARD -->
+        <button id="archerCardBtn" onclick="deployUnitToSelectedLane('archer')"
+                class="unit-card pointer-events-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 sm:gap-3.5 text-left min-w-[168px] sm:min-w-[235px]">
+            <div class="unit-icon-box w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center flex-shrink-0 relative">
+                <svg class="w-9 h-9 sm:w-11 sm:h-11" viewBox="0 0 48 48">
+                    <path d="M15 8 C29 13 29 35 15 40" fill="none" stroke="#d97706" stroke-width="4" stroke-linecap="round"/>
+                    <line x1="15" y1="9" x2="15" y2="39" stroke="#f8fafc" stroke-width="1.8"/>
+                    <line x1="9" y1="24" x2="38" y2="24" stroke="#fde047" stroke-width="3" stroke-linecap="round"/>
+                    <polygon points="41,24 33,19 35,24 33,29" fill="#38bdf8" stroke="#111827" stroke-width="1.4"/>
+                </svg>
+                <span id="archerTowerCountBadge"
+                      class="absolute -top-1.5 -right-1.5 bg-slate-950 text-sky-300 border border-sky-400 rounded-full px-1.5 py-0.2 text-[10px] font-cartoon-sm">
+                    0/3
+                </span>
+            </div>
+            <div class="flex flex-col leading-tight">
+                <div class="font-cartoon text-white text-base sm:text-xl flex items-center gap-1.5">
+                    <span>ARCHER</span>
+                    <span class="hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[Z]</span>
+                </div>
+                <div class="font-cartoon text-amber-300 text-xs sm:text-base">
+                    Cost: 50g
+                </div>
+                <div class="font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
+                    ⏱ 1.5s • Lane-Locked
+                </div>
+            </div>
+        </button>
+
+        <!-- BOTTOM-CENTER: SELECTED LANE & DEPLOYMENT FEEDBACK PILL -->
+        <div class="absolute left-1/2 -translate-x-1/2 bottom-full lg:static lg:translate-x-0 flex flex-col items-center pointer-events-none lg:mb-1 min-w-0 px-1.5 whitespace-nowrap">
+        <!-- COMPACT SUB-BAR: LANE SELECTION PILLS (1-4) & STATUS -->
+        <div class="flex items-center justify-center gap-1 sm:gap-1.5 pointer-events-auto mb-1.5">
+            <span class="hidden sm:inline text-[11px] sm:text-xs font-cartoon-sm text-amber-200 bg-black/60 px-2 py-0.5 rounded-full border border-white/15">
+                TARGET LANE:
+            </span>
+            <button onclick="selectLane(0)" id="laneBtn0"
+                    class="px-2.5 py-0.5 rounded-full text-xs font-cartoon-sm border-2 transition-all">
+                1: NW
+            </button>
+            <button onclick="selectLane(1)" id="laneBtn1"
+                    class="px-2.5 py-0.5 rounded-full text-xs font-cartoon-sm border-2 transition-all">
+                2: NE
+            </button>
+            <button onclick="selectLane(2)" id="laneBtn2"
+                    class="px-2.5 py-0.5 rounded-full text-xs font-cartoon-sm border-2 transition-all">
+                3: SW
+            </button>
+            <button onclick="selectLane(3)" id="laneBtn3"
+                    class="px-2.5 py-0.5 rounded-full text-xs font-cartoon-sm border-2 transition-all">
+                4: SE
+            </button>
+        </div>
+            <div id="bottomHintBanner"
+                 class="hidden lg:block bg-slate-950/85 border-2 border-sky-400/70 rounded-full px-4 py-1.5 text-xs font-cartoon-sm text-sky-200 shadow-lg">
+                Tap a road ring to select lane • Tap Archer or Swordsman to deploy
+            </div>
+        </div>
+
+        <!-- BOTTOM-RIGHT: SWORDSMAN DEPLOYMENT CARD -->
+        <button id="swordsmanCardBtn" onclick="deployUnitToSelectedLane('swordsman')"
+                class="unit-card pointer-events-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 sm:gap-3.5 text-left min-w-[175px] sm:min-w-[245px]">
+            <div class="flex flex-col leading-tight text-right sm:text-left">
+                <div class="font-cartoon text-white text-base sm:text-xl flex items-center justify-end sm:justify-start gap-1.5">
+                    <span>SWORDSMAN</span>
+                    <span class="hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[X]</span>
+                </div>
+                <div class="font-cartoon text-amber-300 text-xs sm:text-base">
+                    Cost: 75g
+                </div>
+                <div class="font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
+                    ⏱ 3.0s • Breaks Shields
+                </div>
+            </div>
+            <div class="unit-icon-box w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center flex-shrink-0 relative">
+                <svg class="w-9 h-9 sm:w-11 sm:h-11" viewBox="0 0 48 48">
+                    <path d="M12 10 L34 10 L34 25 C34 34 23 40 23 40 C23 40 12 34 12 25 Z"
+                          fill="#2563eb" stroke="#fbbf24" stroke-width="2.8"/>
+                    <line x1="16" y1="36" x2="38" y2="10" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+                    <line x1="14" y1="31" x2="22" y2="38" stroke="#f59e0b" stroke-width="3.2" stroke-linecap="round"/>
+                </svg>
+                <span id="swordsmanLaneCountBadge"
+                      class="absolute -top-1.5 -right-1.5 bg-slate-950 text-amber-300 border border-amber-400 rounded-full px-1.5 py-0.2 text-[10px] font-cartoon-sm">
+                    0
+                </span>
+            </div>
+        </button>
+    </div>
+
+    <!-- VICTORY / DEFEAT MODAL OVERLAY -->
+    <div id="endGameModal" class="fixed inset-0 z-30 hidden items-center justify-center bg-black/75 p-4">
+        <div class="hud-pill max-w-md w-full p-6 text-center border-4 border-amber-400 bg-slate-900">
+            <h2 id="endGameTitle" class="font-cartoon text-3xl sm:text-4xl text-amber-300 mb-2">VICTORY!</h2>
+            <p id="endGameSubtitle" class="text-slate-200 text-sm sm:text-base mb-5">
+                The Bastion of the Four Roads stands unbroken!
+            </p>
+            <div class="grid grid-cols-3 gap-2 mb-6 bg-slate-950/90 p-3 rounded-xl border border-slate-800">
+                <div>
+                    <div class="text-[11px] text-slate-400 uppercase font-bold">Wave Reached</div>
+                    <div id="endStatWave" class="font-cartoon text-xl text-white">20 / 20</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-slate-400 uppercase font-bold">Enemies Slain</div>
+                    <div id="endStatKills" class="font-cartoon text-xl text-emerald-400">0</div>
+                </div>
+                <div>
+                    <div class="text-[11px] text-slate-400 uppercase font-bold">Gold Treasury</div>
+                    <div id="endStatGold" class="font-cartoon text-xl text-amber-300">0</div>
+                </div>
+            </div>
+            <button onclick="resetNewBattle()"
+                    class="unit-card w-full py-3 font-cartoon text-white text-lg tracking-wider">
+                PLAY AGAIN
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================================================================================== -->
+    <!-- QUICK-PAUSE WORKPLACE READER & KEYTRAINSECURE.COM PORTAL OVERLAY                     -->
+    <!-- ==================================================================================== -->
+    <div id="workplaceReaderOverlay"
+         class="fixed inset-0 z-50 hidden flex-col bg-slate-950 text-slate-100 reader-scroll overflow-y-auto">
+
+        <!-- Professional Top Navigation Bar -->
+        <header class="sticky top-0 z-20 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-4 sm:px-6 py-3">
+            <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-sky-600 flex items-center justify-center font-bold text-white shadow">
+                        KT
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-white text-base sm:text-lg tracking-tight">KeyTrain Secure</span>
+                            <span class="text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-semibold">
+                                Ad-Free Enterprise Briefs
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400">
+                            Applied Cybersecurity, Threat Intelligence &amp; Workforce Readiness Portal
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <label class="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer">
+                        <input type="checkbox" id="instantRedirectCheckbox" onchange="toggleInstantRedirectSetting(this.checked)"
+                               class="rounded text-sky-500 focus:ring-0">
+                        <span>Instant Redirect to KeyTrainSecure.com on Pause</span>
+                    </label>
+
+                    <a href="https://keytrainsecure.com" target="_blank" rel="noopener noreferrer"
+                       class="bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-lg transition">
+                        Open KeyTrainSecure.com ↗
+                    </a>
+
+                    <button onclick="redirectDirectlyToKeyTrain()"
+                            class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-lg transition">
+                        Go Straight There Now →
+                    </button>
+
+                    <button onclick="closeWorkplaceReader()"
+                            class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-lg shadow transition">
+                        Resume Defense [P / Esc]
+                    </button>
+                </div>
+            </div>
+
+            <!-- Reader Section Tabs -->
+            <div class="max-w-6xl mx-auto mt-3 flex flex-wrap gap-2 border-t border-slate-800/80 pt-2.5">
+                <button onclick="switchReaderTab('articles')" id="readerTabBtn-articles"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-sky-600 text-white">
+                    Cybersecurity Executive Briefs
+                </button>
+                <button onclick="switchReaderTab('portal')" id="readerTabBtn-portal"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">
+                    KeyTrainSecure.com Live Portal
+                </button>
+                <button onclick="switchReaderTab('blueprint')" id="readerTabBtn-blueprint"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">
+                    Concept Art &amp; AI Game Specification
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Reader Content Container -->
+        <main class="max-w-6xl w-full mx-auto p-4 sm:p-6 flex-1">
+
+            <!-- TAB 1: AD-FREE CYBERSECURITY ARTICLES -->
+            <section id="readerSection-articles" class="space-y-6">
+                <div class="bg-gradient-to-r from-sky-950/80 via-slate-900 to-indigo-950/80 border border-sky-500/30 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="text-xs font-bold uppercase tracking-wider text-sky-400 mb-1">
+                            KeyTrain LLC • Defense-in-Depth Architecture
+                        </div>
+                        <h1 class="text-xl sm:text-2xl font-bold text-white mb-1">
+                            Modernizing Organizational Resilience Across Endpoints, Networks &amp; Personnel
+                        </h1>
+                        <p class="text-xs sm:text-sm text-slate-300 max-w-3xl">
+                            Just as a multi-lane bastion requires coordinated perimeter visibility and rapid incident response, enterprise security relies on unified telemetry, federated threat intelligence, and continuous human-factor training.
+                        </p>
+                    </div>
+                    <a href="https://keytrainsecure.com" target="_blank" rel="noopener noreferrer"
+                       class="flex-shrink-0 bg-white text-slate-950 hover:bg-sky-100 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow">
+                        Visit KeyTrainSecure.com →
+                    </a>
+                </div>
+
+                <!-- 4 Pillar Articles Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <article class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-sky-400 font-semibold mb-2">
+                                <span>ENDPOINT &amp; TELEMETRY DEFENSE</span>
+                                <span>5 min read</span>
+                            </div>
+                            <h2 class="text-lg font-bold text-white mb-2">
+                                Halo: Unified Endpoint Visibility &amp; Zero-Trust Micro-Segmentation
+                            </h2>
+                            <p class="text-sm text-slate-300 leading-relaxed mb-3">
+                                Perimeter-only security leaves internal lanes vulnerable once a single credential is compromised. <strong>Halo</strong> provides continuous endpoint posture verification, behavioral anomaly detection, and least-privilege enforcement so lateral movement is stopped at the bridge before critical assets are reached.
+                            </p>
+                            <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside mb-4">
+                                <li>Real-time process &amp; kernel-level telemetry correlation</li>
+                                <li>Automated containment of unauthorized lateral privilege escalation</li>
+                                <li>Zero-Trust verification for hybrid and remote workforces</li>
+                            </ul>
+                        </div>
+                        <a href="https://keytrainsecure.com" target="_blank" rel="noopener noreferrer"
+                           class="text-xs font-semibold text-sky-400 hover:text-sky-300">
+                            Explore Halo Architecture on KeyTrainSecure.com →
+                        </a>
+                    </article>
+
+                    <article class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-amber-400 font-semibold mb-2">
+                                <span>FEDERATED THREAT INTELLIGENCE</span>
+                                <span>6 min read</span>
+                            </div>
+                            <h2 class="text-lg font-bold text-white mb-2">
+                                RailNet: High-Speed Collective Threat Telemetry Across Sectors
+                            </h2>
+                            <p class="text-sm text-slate-300 leading-relaxed mb-3">
+                                Attackers reuse infrastructure across multiple targets simultaneously. <strong>RailNet</strong> synchronizes anonymized Indicators of Compromise (IOCs) and Tactics, Techniques, and Procedures (TTPs) across participating organizations in real time—turning an attack against one node into proactive immunity for all connected defenders.
+                            </p>
+                            <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside mb-4">
+                                <li>Automated STIX/TAXII threat feed ingestion and enrichment</li>
+                                <li>Sub-second blocklist propagation across perimeter firewalls</li>
+                                <li>MITRE ATT&amp;CK mapped adversary campaign tracking</li>
+                            </ul>
+                        </div>
+                        <a href="https://keytrainsecure.com" target="_blank" rel="noopener noreferrer"
+                           class="text-xs font-semibold text-amber-400 hover:text-amber-300">
+                            Learn About RailNet Intelligence Sharing →
+                        </a>
+                    </article>
+
+                    <article class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-emerald-400 font-semibold mb-2">
+                                <span>HUMAN RISK MANAGEMENT</span>
+                                <span>4 min read</span>
+                            </div>
+                            <h2 class="text-lg font-bold text-white mb-2">
+                                HOOKeD: Adaptive Phishing Simulation &amp; Social Engineering Defense
+                            </h2>
+                            <p class="text-sm text-slate-300 leading-relaxed mb-3">
+                                Over 80% of modern intrusions begin with social engineering, spear-phishing, or MFA fatigue. <strong>HOOKeD</strong> transforms employees from targets into active sensors through realistic, role-tailored phishing simulations paired with immediate, constructive micro-coaching at the moment of interaction.
+                            </p>
+                            <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside mb-4">
+                                <li>Context-aware phishing templates aligned with current threat actors</li>
+                                <li>One-click employee reporting workflows and mean-time-to-report metrics</li>
+                                <li>Positive-reinforcement micro-learning without punitive friction</li>
+                            </ul>
+                        </div>
+                        <a href="https://keytrainsecure.com" target="_blank" rel="noopener noreferrer"
+                           class="text-xs font-semibold text-emerald-400 hover:text-emerald-300">
+                            View HOOKeD Training Programs →
+                        </a>
+                    </article>
+
+                    <article class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-purple-400 font-semibold mb-2">
+                                <span>WORKFORCE CERTIFICATION &amp; LABS</span>
+                                <span>7 min read</span>
+                            </div>
+                            <h2 class="text-lg font-bold text-white mb-2">
+                                KeyTrain Learning: CompTIA Security+ (SY0-701) &amp; Hands-On Cyber Ranges
+                            </h2>
+                            <p class="text-sm text-slate-300 leading-relaxed mb-3">
+                                Building a resilient security operations center starts with certified, battle-tested practitioners. <strong>KeyTrain Learning</strong> delivers structured preparation for CompTIA Security+ (SY0-701), DoD 8140/8570 compliance, and interactive incident-response labs.
+                            </p>
+                            <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside mb-4">
+                                <li>Domains 1–5 mastery: Cryptography, IAM, Cloud &amp; Zero-Trust</li>
+                                <li>Guided packet analysis, SIEM log triage, and vulnerability management</li>
+                                <li>Self-paced enterprise cohorts with measurable readiness dashboards</li>
+                            </ul>
+                        </div>
+                        <a href="https://keytrainsecure.com" target="_blank" rel="noopener noreferrer"
+                           class="text-xs font-semibold text-purple-400 hover:text-purple-300">
+                            Start CompTIA Security+ Prep at KeyTrainSecure.com →
+                        </a>
+                    </article>
+                </div>
+            </section>
+
+            <!-- TAB 2: LIVE KEYTRAINSECURE.COM PORTAL -->
+            <section id="readerSection-portal" class="hidden space-y-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-bold text-white text-base">KeyTrainSecure.com Direct Portal</h3>
+                        <p class="text-xs text-slate-400">
+                            If your organization's X-Frame-Options policy blocks embedded previews, use the direct launch button on the right.
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="https://keytrainsecure.com" target="_blank" rel="noopener noreferrer"
+                           class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-lg">
+                            Launch KeyTrainSecure.com in New Tab ↗
+                        </a>
+                        <button onclick="redirectDirectlyToKeyTrain()"
+                                class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg">
+                            Navigate Current Tab to KeyTrainSecure.com →
+                        </button>
+                    </div>
+                </div>
+                <div class="w-full h-[540px] bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <iframe src="https://keytrainsecure.com" title="KeyTrainSecure.com Portal"
+                            class="w-full h-full border-0 bg-slate-950" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+                </div>
+            </section>
+
+            <!-- TAB 3: CONCEPT ART SNAPSHOT & COMPLETE AI BLUEPRINT -->
+            <section id="readerSection-blueprint" class="hidden space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div>
+                            <h3 class="font-bold text-white text-base">
+                                Original 2.5D Isometric Battlefield Concept Art (Self-Contained Procedural Snapshot)
+                            </h3>
+                            <p class="text-xs text-slate-400">
+                                Central Castle Keep + Circular Water Moat + 4 Arched Bridges in an X-Cross + Lane-Locked Corner Towers &amp; Holographic Deployment Timers
+                            </p>
+                        </div>
+                        <button onclick="renderConceptArtSnapshot()"
+                                class="bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700">
+                            Redraw Concept Art Snapshot
+                        </button>
+                    </div>
+                    <div class="w-full rounded-xl overflow-hidden border-2 border-slate-950 bg-slate-950 flex justify-center">
+                        <canvas id="conceptArtCanvas" width="900" height="450" class="w-full max-w-[900px] h-auto block"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div>
+                            <h3 class="font-bold text-white text-base">
+                                Complete AI Specification &amp; Rebuild Prompt
+                            </h3>
+                            <p class="text-xs text-slate-400">
+                                Copy this specification to give any AI model everything needed to reconstruct the game and workplace reader.
+                            </p>
+                        </div>
+                        <button onclick="copyAiSpecToClipboard()" id="copySpecBtn"
+                                class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg">
+                            Copy AI Specification
+                        </button>
+                    </div>
+                    <pre id="aiSpecPre" class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[420px] overflow-y-auto"></pre>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ==================================================================================== -->
+    <!-- COMPLETE GAME ENGINE, 2.5D ISOMETRIC RENDERER, AUDIO & PERSISTENCE                   -->
+    <!-- ==================================================================================== -->
+    <script>
+        "use strict";
+
+        // ------------------------------------------------------------------------------------
+        // 1. CONSTANTS, UNIT CONFIGURATIONS & STORAGE KEYS
+        // ------------------------------------------------------------------------------------
+        const STORAGE_KEY = 'bastion_four_roads_save_v2';
+        const REDIRECT_PREF_KEY = 'bastion_keytrain_instant_redirect_v2';
+        const ORIGINAL_TITLE = 'Bastion of the Four Roads';
+        const READER_TITLE = 'KeyTrain — Enterprise Cybersecurity & Threat Intelligence Briefs';
+
+        const LANE_META = [
+            { id: 0, code: 'NW', name: 'Lane 1 (NW)', dirX: -1, dirY: -1 },
+            { id: 1, code: 'NE', name: 'Lane 2 (NE)', dirX:  1, dirY: -1 },
+            { id: 2, code: 'SW', name: 'Lane 3 (SW)', dirX: -1, dirY:  1 },
+            { id: 3, code: 'SE', name: 'Lane 4 (SE)', dirX:  1, dirY:  1 }
+        ];
+
+        const UNITS = {
+            archer: {
+                type: 'archer',
+                name: 'ARCHER',
+                cost: 50,
+                deployTime: 1.5,
+                damage: 16,
+                fireInterval: 0.85,
+                maxPerTower: 3,
+                maxAmmo: 20,
+                rangeDist: 0.90
+            },
+            swordsman: {
+                type: 'swordsman',
+                name: 'SWORDSMAN',
+                cost: 75,
+                deployTime: 3.0,
+                hp: 135,
+                maxHp: 135,
+                damage: 22,
+                attackInterval: 0.85,
+                speed: 0.20,
+                guardDist: 0.34
+            }
+        };
+
+        const ENEMY_TYPES = {
+            goblin: {
+                type: 'goblin',
+                name: 'Goblin Scout',
+                hp: 46,
+                speed: 0.082,
+                damage: 9,
+                attackInterval: 1.05,
+                bounty: 25,
+                arrowResist: 0.0,
+                radius: 13
+            },
+            orc: {
+                type: 'orc',
+                name: 'Shield Orc',
+                hp: 96,
+                speed: 0.056,
+                damage: 15,
+                attackInterval: 1.25,
+                bounty: 45,
+                arrowResist: 0.75, // 75% arrow damage reduction until shield broken by melee
+                hasShield: true,
+                radius: 16
+            },
+            ogre: {
+                type: 'ogre',
+                name: 'Siege Ogre',
+                hp: 225,
+                speed: 0.038,
+                damage: 28,
+                attackInterval: 1.65,
+                bounty: 80,
+                arrowResist: 0.15,
+                radius: 21
+            }
+        };
+
+        // ------------------------------------------------------------------------------------
+        // 2. PROCEDURAL WEB AUDIO SYNTHESIZER (ZERO EXTERNAL SOUND FILES)
+        // ------------------------------------------------------------------------------------
+        const sfx = {
+            ctx: null,
+            muted: false,
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) {
+                        try { this.ctx = new AudioCtx(); } catch (e) {}
+                    }
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    try { this.ctx.resume(); } catch (e) {}
+                }
+            },
+            tone(freq, type, duration, vol = 0.08, slideTo = null) {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, now);
+                    if (slideTo) {
+                        osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), now + duration);
+                    }
+                    gain.gain.setValueAtTime(vol, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + duration);
+                } catch (e) {}
+            },
+            playSelect()   { this.tone(520, 'sine', 0.07, 0.05, 660); },
+            playDeploy()   { this.tone(340, 'triangle', 0.14, 0.08, 580); },
+            playSpawned()  { this.tone(440, 'sine', 0.18, 0.09, 880); },
+            playBow()      { this.tone(680, 'triangle', 0.08, 0.05, 220); },
+            playSword()    { this.tone(240, 'sawtooth', 0.09, 0.07, 110); },
+            playShieldBreak() { this.tone(180, 'square', 0.22, 0.10, 420); },
+            playGold()     { this.tone(880, 'sine', 0.11, 0.06, 1180); },
+            playCastleHit(){ this.tone(110, 'sawtooth', 0.22, 0.11, 55); },
+            playError()    { this.tone(160, 'sawtooth', 0.14, 0.07, 120); }
+        };
+
+        function toggleAudioMute() {
+            sfx.muted = !sfx.muted;
+            const lbl = document.getElementById('muteLabel');
+            if (lbl) lbl.textContent = sfx.muted ? 'SFX OFF' : 'SFX ON';
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 3. GAME STATE & PROCEDURAL SCENERY DATA
+        // ------------------------------------------------------------------------------------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+
+        const game = {
+            castleHp: 1000,
+            maxCastleHp: 1000,
+            gold: 200,
+            passiveGoldAccum: 0,
+            wave: 1,
+            maxWaves: 20,
+            selectedLane: 0, // 0: NW, 1: NE, 2: SW, 3: SE
+            deployment: null, // { type, lane, remaining, total } - strict one-at-a-time lock
+            archers: [[], [], [], []], // Strict lane-locked towers: archers[laneIdx]
+            swordsmen: [],
+            enemies: [],
+            arrows: [],
+            particles: [],
+            floatingTexts: [],
+            waveQueue: [],
+            spawnTimer: 4.0, // Initial 4-second grace period on Wave 1
+            waveBannerTimer: 0,
+            paused: false,
+            gameOver: false,
+            victory: false,
+            totalKills: 0,
+            animTime: 0,
+            instantRedirectOnPause: false
+        };
+
+        // Helper for cross-browser rounded rectangles on canvas
+        function drawRoundRectPath(c, x, y, w, h, r) {
+            const rad = Math.min(r, w / 2, h / 2);
+            c.beginPath();
+            c.moveTo(x + rad, y);
+            c.lineTo(x + w - rad, y);
+            c.quadraticCurveTo(x + w, y, x + w, y + rad);
+            c.lineTo(x + w, y + h - rad);
+            c.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+            c.lineTo(x + rad, y + h);
+            c.quadraticCurveTo(x, y + h, x, y + h - rad);
+            c.lineTo(x, y + rad);
+            c.quadraticCurveTo(x, y, x + rad, y);
+            c.closePath();
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 4. SCENERY (generated per-viewport inside the cached art layers, see section 11)
+        // ------------------------------------------------------------------------------------
+        function generateScenery() { /* scenery is baked into the cached art layers */ }
+
+        // ------------------------------------------------------------------------------------
+        // 5. ISOMETRIC BATTLEFIELD GEOMETRY ENGINE
+        //    World space: +x runs toward the NE road, +y toward the NW road, z is height.
+        //    The four lanes lie exactly on the world axes, so castle, bridges and roads all
+        //    share one true isometric projection.
+        // ------------------------------------------------------------------------------------
+        const WORLD_R = { gate: 96, island: 124, moat: 214 };
+        const WATER_DROP = 12;      // water surface sits this far below the grass
+        const BRIDGE_LIFT = 14;     // arch height of the bridge deck
+        const ROAD_HALF_W = 21;
+        const TOWER_TOP_Z = 50;
+        const LANE_AXES = [
+            { ax: 0,  ay: 1,  lx: -1, ly: 0  },  // 0: NW
+            { ax: 1,  ay: 0,  lx: 0,  ly: -1 },  // 1: NE
+            { ax: -1, ay: 0,  lx: 0,  ly: 1  },  // 2: SW
+            { ax: 0,  ay: -1, lx: 1,  ly: 0  }   // 3: SE
+        ];
+        let geomCache = {};
+
+        function computeBattlefieldGeometry(w, h) {
+            const key = w + 'x' + h;
+            if (geomCache[key]) return geomCache[key];
+            if (Object.keys(geomCache).length > 3) geomCache = {};
+
+            const cx = w * 0.5;
+            const cy = h * 0.5;
+            const scale = Math.max(0.25, Math.min(w / 780, h / 560));
+            const slope = Math.max(0.52, Math.min(0.72, (h / w) * 1.06));
+            const A = scale;
+            const B = scale * slope;
+            const P = (x, y, z = 0) => ({ x: cx + (x - y) * A, y: cy - (x + y) * B - z * scale });
+            const endR = Math.max(WORLD_R.moat + 90, Math.min((w * 0.5) / A, (h * 0.5) / B) * 1.06);
+
+            const geom = {
+                w, h, cx, cy, scale, slope, A, B, P, endR,
+                R: WORLD_R,
+                isoRatio: slope,
+                moatOuterRx: Math.SQRT2 * A * WORLD_R.moat,
+                moatOuterRy: Math.SQRT2 * B * WORLD_R.moat,
+                islandRx: Math.SQRT2 * A * WORLD_R.island,
+                islandRy: Math.SQRT2 * B * WORLD_R.island,
+                lanes: []
+            };
+
+            for (let i = 0; i < 4; i++) {
+                const ax = LANE_AXES[i];
+                const start = P(ax.ax * WORLD_R.gate, ax.ay * WORLD_R.gate);
+                const end = P(ax.ax * endR, ax.ay * endR);
+                const tower = P(ax.ax * 80, ax.ay * 80, TOWER_TOP_Z);
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                const length = Math.hypot(dx, dy) || 1;
+                const latLen = Math.hypot((ax.lx - ax.ly) * A, (ax.lx + ax.ly) * B) || 1;
+                const ringR = WORLD_R.moat + 50;
+                const ring = P(ax.ax * ringR + ax.lx * 60, ax.ay * ringR + ax.ly * 60);
+
+                geom.lanes.push({
+                    index: i,
+                    code: LANE_META[i].code,
+                    name: LANE_META[i].name,
+                    ax: ax.ax, ay: ax.ay, lx: ax.lx, ly: ax.ly,
+                    nearSign: (ax.lx + ax.ly) < 0 ? 1 : -1, // lateral sign of the side facing the camera
+                    towerX: tower.x,
+                    towerY: tower.y,
+                    startX: start.x,
+                    startY: start.y,
+                    endX: end.x,
+                    endY: end.y,
+                    dx, dy, length,
+                    ux: dx / length,
+                    uy: dy / length,
+                    px: ((ax.lx - ax.ly) * A) / latLen,
+                    py: (-(ax.lx + ax.ly) * B) / latLen,
+                    roadWidth: ROAD_HALF_W * 2 * scale,
+                    bridgeInnerDist: 0.11,
+                    bridgeOuterDist: 0.40,
+                    deployDist: 0.46,
+                    ringX: ring.x,
+                    ringY: ring.y,
+                    ringRadius: 27 * scale
+                });
+            }
+
+            geomCache[key] = geom;
+            return geom;
+        }
+
+        // Lane progress (0 = castle gate, 0.11-0.40 = bridge, 1 = forest edge) -> world radius
+        function laneDistToRadius(geom, dist) {
+            const d = Math.max(0, Math.min(1.08, dist));
+            const R = geom.R;
+            if (d <= 0.11) return R.gate + (R.island - R.gate) * (d / 0.11);
+            if (d <= 0.40) return R.island + (R.moat - R.island) * ((d - 0.11) / 0.29);
+            return R.moat + (geom.endR - R.moat) * ((d - 0.40) / 0.60);
+        }
+
+        function bridgeLift(geom, r) {
+            const t = (r - geom.R.island) / (geom.R.moat - geom.R.island);
+            return (t <= 0 || t >= 1) ? 0 : Math.sin(t * Math.PI) * BRIDGE_LIFT;
+        }
+
+        function laneDistToXY(geom, laneIdx, dist, lateralOffset = 0) {
+            const lane = geom.lanes[laneIdx];
+            const r = laneDistToRadius(geom, dist);
+            const lat = lateralOffset / geom.scale;
+            return geom.P(lane.ax * r + lane.lx * lat, lane.ay * r + lane.ly * lat, bridgeLift(geom, r));
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 6. WAVE GENERATOR & BATTLE INITIALIZATION
+        // ------------------------------------------------------------------------------------
+        function buildWaveQueue(waveNum) {
+            const queue = [];
+            const totalCount = 5 + waveNum * 3;
+            for (let i = 0; i < totalCount; i++) {
+                let type = 'goblin';
+                const r = Math.random();
+                if (waveNum >= 4 && r < Math.min(0.30, (waveNum - 3) * 0.04)) {
+                    type = 'ogre';
+                } else if (waveNum >= 2 && r < Math.min(0.62, 0.25 + waveNum * 0.03)) {
+                    type = 'orc';
+                }
+                const lane = (i + waveNum) % 4;
+                const delay = i === 0 ? 0.8 : Math.max(0.55, 2.1 - waveNum * 0.06) + Math.random() * 0.6;
+                queue.push({ type, lane, delay });
+            }
+            return queue;
+        }
+
+        function initFreshGameState() {
+            game.castleHp = 1000;
+            game.maxCastleHp = 1000;
+            game.gold = 200;
+            game.passiveGoldAccum = 0;
+            game.wave = 1;
+            game.selectedLane = 0;
+            game.deployment = null;
+            game.archers = [[], [], [], []]; // ZERO pre-placed archers
+            game.swordsmen = [];             // ZERO pre-placed swordsmen
+            game.enemies = [];               // ZERO initial enemies on frame 1
+            game.arrows = [];                // ZERO initial arrows
+            game.particles = [];
+            game.floatingTexts = [];
+            game.waveQueue = buildWaveQueue(1);
+            game.spawnTimer = 4.0;           // 4-second grace period before first enemy spawns
+            game.waveBannerTimer = 2.8;
+            game.gameOver = false;
+            game.victory = false;
+            game.totalKills = 0;
+
+            const modal = document.getElementById('endGameModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+            updateHudDom();
+        }
+
+        function resetNewBattle() {
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+            initFreshGameState();
+            sfx.playDeploy();
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 7. ONE-TIME-LOAD LOCAL STORAGE PERSISTENCE (WITH STRICT SCHEMA VALIDATION)
+        // ------------------------------------------------------------------------------------
+        function saveGameState() {
+            if (game.gameOver || game.victory) return;
+            try {
+                const payload = {
+                    version: 2,
+                    timestamp: Date.now(),
+                    castleHp: Number(game.castleHp) || 1000,
+                    gold: Math.floor(Number(game.gold) || 0),
+                    wave: Math.max(1, Math.min(20, Number(game.wave) || 1)),
+                    selectedLane: [0, 1, 2, 3].includes(game.selectedLane) ? game.selectedLane : 0,
+                    totalKills: Number(game.totalKills) || 0,
+                    deployment: game.deployment ? {
+                        type: game.deployment.type === 'swordsman' ? 'swordsman' : 'archer',
+                        lane: [0, 1, 2, 3].includes(game.deployment.lane) ? game.deployment.lane : 0,
+                        remaining: Math.max(0.05, Number(game.deployment.remaining) || 1.0),
+                        total: Math.max(0.5, Number(game.deployment.total) || 1.5)
+                    } : null,
+                    archers: [0, 1, 2, 3].map(laneIdx =>
+                        Array.isArray(game.archers[laneIdx])
+                            ? game.archers[laneIdx].slice(0, UNITS.archer.maxPerTower).map(a => ({
+                                lane: laneIdx,
+                                ammo: Math.max(1, Math.min(UNITS.archer.maxAmmo, Number(a.ammo) || 20)),
+                                cooldown: 0.2
+                            }))
+                            : []
+                    ),
+                    swordsmen: Array.isArray(game.swordsmen)
+                        ? game.swordsmen.slice(0, 24).map(s => ({
+                            lane: [0, 1, 2, 3].includes(s.lane) ? s.lane : 0,
+                            dist: Math.max(0.05, Math.min(0.95, Number(s.dist) || 0.25)),
+                            hp: Math.max(1, Number(s.hp) || UNITS.swordsman.hp),
+                            maxHp: UNITS.swordsman.maxHp,
+                            lateral: Number(s.lateral) || 0
+                        }))
+                        : [],
+                    enemies: Array.isArray(game.enemies)
+                        ? game.enemies.slice(0, 40).map(e => ({
+                            type: ENEMY_TYPES[e.type] ? e.type : 'goblin',
+                            lane: [0, 1, 2, 3].includes(e.lane) ? e.lane : 0,
+                            dist: Math.max(0.08, Math.min(1.05, Number(e.dist) || 0.85)),
+                            hp: Math.max(1, Number(e.hp) || 40),
+                            maxHp: Math.max(1, Number(e.maxHp) || 40),
+                            arrowResist: Number(e.arrowResist) || 0,
+                            hasShield: Boolean(e.hasShield),
+                            lateral: Number(e.lateral) || 0
+                        }))
+                        : [],
+                    waveQueue: Array.isArray(game.waveQueue) ? game.waveQueue.slice(0, 80) : []
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            } catch (e) {}
+        }
+
+        function loadPersistedStateOnce() {
+            try {
+                const redirPref = localStorage.getItem(REDIRECT_PREF_KEY);
+                game.instantRedirectOnPause = (redirPref === 'true');
+                const cb = document.getElementById('instantRedirectCheckbox');
+                if (cb) cb.checked = game.instantRedirectOnPause;
+
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return false;
+                const data = JSON.parse(raw);
+                if (!data || data.version !== 2) return false;
+
+                const hp = Number(data.castleHp);
+                if (!Number.isFinite(hp) || hp <= 0) return false;
+
+                game.castleHp = Math.min(game.maxCastleHp, Math.max(1, hp));
+                game.gold = Math.max(0, Math.min(99999, Math.floor(Number(data.gold) || 200)));
+                game.wave = Math.max(1, Math.min(20, Math.floor(Number(data.wave) || 1)));
+                game.selectedLane = [0, 1, 2, 3].includes(data.selectedLane) ? data.selectedLane : 0;
+                game.totalKills = Math.max(0, Math.floor(Number(data.totalKills) || 0));
+
+                // Hydrate strictly lane-locked tower archers
+                game.archers = [0, 1, 2, 3].map(laneIdx => {
+                    const arr = (Array.isArray(data.archers) && Array.isArray(data.archers[laneIdx]))
+                        ? data.archers[laneIdx]
+                        : [];
+                    return arr.slice(0, UNITS.archer.maxPerTower).map(a => ({
+                        lane: laneIdx,
+                        ammo: Math.max(1, Math.min(UNITS.archer.maxAmmo, Number(a.ammo) || UNITS.archer.maxAmmo)),
+                        cooldown: 0.25,
+                        shootAnim: 0
+                    }));
+                });
+
+                // Hydrate bridge swordsmen
+                game.swordsmen = Array.isArray(data.swordsmen)
+                    ? data.swordsmen.slice(0, 24).map(s => ({
+                        lane: [0, 1, 2, 3].includes(s.lane) ? s.lane : 0,
+                        dist: Math.max(0.05, Math.min(0.95, Number(s.dist) || 0.28)),
+                        hp: Math.max(1, Math.min(UNITS.swordsman.maxHp, Number(s.hp) || UNITS.swordsman.hp)),
+                        maxHp: UNITS.swordsman.maxHp,
+                        cooldown: 0.2,
+                        attackAnim: 0,
+                        lateral: Number(s.lateral) || 0
+                    }))
+                    : [];
+
+                // Hydrate road enemies
+                game.enemies = Array.isArray(data.enemies)
+                    ? data.enemies.slice(0, 40).map(e => {
+                        const cfg = ENEMY_TYPES[e.type] || ENEMY_TYPES.goblin;
+                        return {
+                            type: cfg.type,
+                            name: cfg.name,
+                            lane: [0, 1, 2, 3].includes(e.lane) ? e.lane : 0,
+                            dist: Math.max(0.08, Math.min(1.05, Number(e.dist) || 0.85)),
+                            hp: Math.max(1, Number(e.hp) || cfg.hp),
+                            maxHp: Math.max(1, Number(e.maxHp) || cfg.hp),
+                            speed: cfg.speed,
+                            damage: cfg.damage,
+                            attackInterval: cfg.attackInterval,
+                            bounty: cfg.bounty,
+                            arrowResist: Number.isFinite(Number(e.arrowResist)) ? Number(e.arrowResist) : cfg.arrowResist,
+                            hasShield: Boolean(e.hasShield),
+                            radius: cfg.radius,
+                            cooldown: 0.4,
+                            hitFlash: 0,
+                            lateral: Number(e.lateral) || 0
+                        };
+                    })
+                    : [];
+
+                // Hydrate active deployment timer if present
+                if (data.deployment && (data.deployment.type === 'archer' || data.deployment.type === 'swordsman')) {
+                    game.deployment = {
+                        type: data.deployment.type,
+                        lane: [0, 1, 2, 3].includes(data.deployment.lane) ? data.deployment.lane : 0,
+                        remaining: Math.max(0.1, Number(data.deployment.remaining) || 1.0),
+                        total: Math.max(0.5, Number(data.deployment.total) || 1.5)
+                    };
+                } else {
+                    game.deployment = null;
+                }
+
+                if (Array.isArray(data.waveQueue) && data.waveQueue.length > 0) {
+                    game.waveQueue = data.waveQueue.filter(q =>
+                        q && ENEMY_TYPES[q.type] && [0, 1, 2, 3].includes(q.lane)
+                    );
+                } else if (game.enemies.length === 0) {
+                    game.waveQueue = buildWaveQueue(game.wave);
+                } else {
+                    game.waveQueue = [];
+                }
+
+                game.spawnTimer = 2.0;
+                updateHudDom();
+                return true;
+            } catch (err) {
+                try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+                return false;
+            }
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 8. LANE SELECTION & ONE-AT-A-TIME UNIT DEPLOYMENT SYSTEM
+        // ------------------------------------------------------------------------------------
+        function selectLane(laneIdx) {
+            if (![0, 1, 2, 3].includes(laneIdx)) return;
+            game.selectedLane = laneIdx;
+            sfx.playSelect();
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+            const lane = geom.lanes[laneIdx];
+            addFloatingText(`${lane.name} SELECTED`, lane.ringX, lane.ringY - 26, '#38bdf8', 14);
+            updateHudDom();
+        }
+
+        function deployUnitToSelectedLane(unitType) {
+            if (game.paused || game.gameOver || game.victory) return;
+            const cfg = UNITS[unitType];
+            if (!cfg) return;
+
+            const laneIdx = game.selectedLane;
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+            const lane = geom.lanes[laneIdx];
+
+            // 1. Check strict one-at-a-time deployment lock
+            if (game.deployment !== null) {
+                sfx.playError();
+                addFloatingText('DEPLOYING IN PROGRESS!', lane.ringX, lane.ringY - 25, '#fbbf24', 14);
+                return;
+            }
+
+            // 2. If Archer, verify connected corner tower has space (max 3 per tower)
+            if (unitType === 'archer' && game.archers[laneIdx].length >= UNITS.archer.maxPerTower) {
+                sfx.playError();
+                addFloatingText(`${lane.code} TOWER FULL (3/3)!`, lane.towerX, lane.towerY - 28, '#f87171', 14);
+                return;
+            }
+
+            // 3. Check Gold treasury
+            if (game.gold < cfg.cost) {
+                sfx.playError();
+                addFloatingText(`NEED ${cfg.cost} GOLD!`, lane.ringX, lane.ringY - 25, '#f87171', 15);
+                return;
+            }
+
+            // Deduct cost & start one-at-a-time holographic deployment countdown
+            game.gold -= cfg.cost;
+            game.deployment = {
+                type: unitType,
+                lane: laneIdx,
+                remaining: cfg.deployTime,
+                total: cfg.deployTime
+            };
+
+            sfx.playDeploy();
+            const targetX = unitType === 'archer' ? lane.towerX : lane.ringX;
+            const targetY = unitType === 'archer' ? lane.towerY - 22 : lane.ringY - 22;
+            addFloatingText(`-${cfg.cost}g`, targetX, targetY, '#fde047', 15);
+            saveGameState();
+            updateHudDom();
+        }
+
+        function completeActiveDeployment(dep) {
+            const laneIdx = dep.lane;
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+            const lane = geom.lanes[laneIdx];
+
+            if (dep.type === 'archer') {
+                if (game.archers[laneIdx].length < UNITS.archer.maxPerTower) {
+                    game.archers[laneIdx].push({
+                        lane: laneIdx,
+                        ammo: UNITS.archer.maxAmmo,
+                        cooldown: 0.1,
+                        shootAnim: 0
+                    });
+                    spawnBurstParticles(lane.towerX, lane.towerY - 12, '#38bdf8', 14);
+                    addFloatingText(`ARCHER READY (${lane.code})`, lane.towerX, lane.towerY - 30, '#38bdf8', 14);
+                }
+            } else if (dep.type === 'swordsman') {
+                const sameLaneCount = game.swordsmen.filter(s => s.lane === laneIdx).length;
+                const lateral = ((sameLaneCount % 3) - 1) * 11 * geom.scale;
+                game.swordsmen.push({
+                    lane: laneIdx,
+                    dist: 0.14,
+                    guardDist: Math.min(0.45, UNITS.swordsman.guardDist + (sameLaneCount % 3) * 0.035),
+                    hp: UNITS.swordsman.hp,
+                    maxHp: UNITS.swordsman.maxHp,
+                    cooldown: 0.1,
+                    attackAnim: 0,
+                    lateral
+                });
+                const pt = laneDistToXY(geom, laneIdx, 0.24, lateral);
+                spawnBurstParticles(pt.x, pt.y - 10, '#38bdf8', 14);
+                addFloatingText(`SWORDSMAN READY (${lane.code})`, pt.x, pt.y - 26, '#38bdf8', 14);
+            }
+
+            sfx.playSpawned();
+            saveGameState();
+            updateHudDom();
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 9. CORE SIMULATION UPDATE LOOP
+        // ------------------------------------------------------------------------------------
+        function updateSimulation(dt) {
+            if (game.paused || game.gameOver || game.victory) return;
+
+            game.animTime += dt;
+            if (game.waveBannerTimer > 0) {
+                game.waveBannerTimer = Math.max(0, game.waveBannerTimer - dt);
+            }
+
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+
+            // 1. Passive Castle Gold Income (+4g / sec)
+            game.passiveGoldAccum += 4.0 * dt;
+            if (game.passiveGoldAccum >= 1.0) {
+                const whole = Math.floor(game.passiveGoldAccum);
+                game.gold += whole;
+                game.passiveGoldAccum -= whole;
+            }
+
+            // 2. Update One-at-a-Time Deployment Countdown
+            if (game.deployment) {
+                game.deployment.remaining -= dt;
+                if (game.deployment.remaining <= 0) {
+                    const finished = game.deployment;
+                    game.deployment = null;
+                    completeActiveDeployment(finished);
+                }
+            }
+
+            // 3. Spawn Enemies from Current Wave Queue
+            if (game.waveQueue.length > 0) {
+                game.spawnTimer -= dt;
+                if (game.spawnTimer <= 0) {
+                    const nextSpawn = game.waveQueue.shift();
+                    const cfg = ENEMY_TYPES[nextSpawn.type] || ENEMY_TYPES.goblin;
+                    const waveHpScale = 1 + (game.wave - 1) * 0.11;
+                    const scaledHp = Math.round(cfg.hp * waveHpScale);
+                    const lateral = (Math.random() - 0.5) * 18 * geom.scale;
+
+                    game.enemies.push({
+                        type: cfg.type,
+                        name: cfg.name,
+                        lane: nextSpawn.lane,
+                        dist: 0.98,
+                        hp: scaledHp,
+                        maxHp: scaledHp,
+                        speed: cfg.speed,
+                        damage: cfg.damage,
+                        attackInterval: cfg.attackInterval,
+                        bounty: cfg.bounty,
+                        arrowResist: cfg.arrowResist,
+                        hasShield: Boolean(cfg.hasShield),
+                        radius: cfg.radius,
+                        cooldown: 0.5,
+                        hitFlash: 0,
+                        lateral
+                    });
+
+                    game.spawnTimer = game.waveQueue.length > 0 ? game.waveQueue[0].delay : 1.0;
+                }
+            } else if (game.enemies.length === 0) {
+                // Wave cleared!
+                if (game.wave >= game.maxWaves) {
+                    game.victory = true;
+                    showEndGameModal(true);
+                    return;
+                } else {
+                    game.wave += 1;
+                    const waveBonus = 75;
+                    game.gold += waveBonus;
+                    game.castleHp = Math.min(game.maxCastleHp, game.castleHp + 60);
+                    game.waveQueue = buildWaveQueue(game.wave);
+                    game.spawnTimer = 2.6;
+                    game.waveBannerTimer = 2.6;
+                    sfx.playGold();
+                    addFloatingText(`WAVE ${game.wave - 1} CLEARED! +${waveBonus}g`, geom.cx, geom.cy - 95 * geom.scale, '#fde047', 19);
+                    saveGameState();
+                }
+            }
+
+            // 4. Update Castle Corner Tower Archers (STRICT SINGLE-LANE TARGETING ONLY: enemy.lane === laneIdx)
+            for (let laneIdx = 0; laneIdx < 4; laneIdx++) {
+                const towerArchers = game.archers[laneIdx];
+                const laneGeom = geom.lanes[laneIdx];
+
+                for (let i = towerArchers.length - 1; i >= 0; i--) {
+                    const archer = towerArchers[i];
+                    if (archer.shootAnim > 0) archer.shootAnim = Math.max(0, archer.shootAnim - dt * 3.5);
+                    archer.cooldown -= dt;
+
+                    if (archer.cooldown <= 0) {
+                        // STRICT SINGLE-LANE LOCK: Only scan enemies advancing on this tower's directly connected lane
+                        let target = null;
+                        let bestDist = Infinity;
+                        for (let eIdx = 0; eIdx < game.enemies.length; eIdx++) {
+                            const e = game.enemies[eIdx];
+                            if (e.lane === laneIdx && e.hp > 0 && e.dist <= UNITS.archer.rangeDist && e.dist < bestDist) {
+                                bestDist = e.dist;
+                                target = e;
+                            }
+                        }
+
+                        if (target) {
+                            archer.cooldown = UNITS.archer.fireInterval;
+                            archer.ammo -= 1;
+                            archer.shootAnim = 1.0;
+                            sfx.playBow();
+
+                            const slotOffsets = [
+                                { dx: -8 * geom.scale, dy: -8 * geom.scale },
+                                { dx:  8 * geom.scale, dy: -8 * geom.scale },
+                                { dx:  0,              dy:  4 * geom.scale }
+                            ];
+                            const off = slotOffsets[i % slotOffsets.length];
+                            const startX = laneGeom.towerX + off.dx;
+                            const startY = laneGeom.towerY + off.dy - 12 * geom.scale;
+                            const targetPt = laneDistToXY(geom, laneIdx, target.dist, target.lateral);
+
+                            game.arrows.push({
+                                lane: laneIdx,
+                                startX,
+                                startY,
+                                targetX: targetPt.x,
+                                targetY: targetPt.y,
+                                targetEnemy: target,
+                                progress: 0,
+                                speed: 2.35,
+                                arcHeight: (36 + bestDist * 34) * geom.scale,
+                                damage: UNITS.archer.damage
+                            });
+
+                            if (archer.ammo <= 0) {
+                                towerArchers.splice(i, 1);
+                                addFloatingText('QUIVER EMPTY', laneGeom.towerX, laneGeom.towerY - 26, '#cbd5e1', 12);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 5. Update Parabolic Arrows in Flight (Strictly bound to their assigned lane)
+            for (let i = game.arrows.length - 1; i >= 0; i--) {
+                const arr = game.arrows[i];
+                arr.progress += arr.speed * dt;
+
+                if (arr.targetEnemy && arr.targetEnemy.hp > 0 && arr.targetEnemy.lane === arr.lane) {
+                    const pt = laneDistToXY(geom, arr.lane, arr.targetEnemy.dist, arr.targetEnemy.lateral);
+                    arr.targetX = pt.x;
+                    arr.targetY = pt.y;
+                }
+
+                if (arr.progress >= 1.0) {
+                    let hitTarget = (arr.targetEnemy && arr.targetEnemy.hp > 0 && arr.targetEnemy.lane === arr.lane)
+                        ? arr.targetEnemy
+                        : null;
+                    if (!hitTarget) {
+                        hitTarget = game.enemies.find(e => e.lane === arr.lane && e.hp > 0 && e.dist <= UNITS.archer.rangeDist);
+                    }
+
+                    if (hitTarget && hitTarget.hp > 0) {
+                        const resist = hitTarget.arrowResist || 0;
+                        const dmg = Math.max(2, Math.round(arr.damage * (1 - resist)));
+                        hitTarget.hp -= dmg;
+                        hitTarget.hitFlash = 0.15;
+
+                        spawnBurstParticles(arr.targetX, arr.targetY - 10, resist > 0.5 ? '#94a3b8' : '#ffffff', 5);
+                        addFloatingText(`-${dmg}`, arr.targetX + (Math.random() - 0.5) * 14, arr.targetY - 24, '#ef4444', 16);
+                    }
+                    game.arrows.splice(i, 1);
+                }
+            }
+
+            // 6. Update Swordsmen on Bridges & Roads
+            for (let i = game.swordsmen.length - 1; i >= 0; i--) {
+                const sw = game.swordsmen[i];
+                if (sw.attackAnim > 0) sw.attackAnim = Math.max(0, sw.attackAnim - dt * 3.5);
+                sw.cooldown = Math.max(0, sw.cooldown - dt);
+
+                // Find closest enemy on the same lane
+                let laneEnemy = null;
+                let minDiff = Infinity;
+                for (let j = 0; j < game.enemies.length; j++) {
+                    const e = game.enemies[j];
+                    if (e.lane === sw.lane && e.hp > 0) {
+                        const diff = Math.abs(e.dist - sw.dist);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            laneEnemy = e;
+                        }
+                    }
+                }
+
+                const meleeRange = 0.065;
+                if (laneEnemy && minDiff <= meleeRange) {
+                    // Engage enemy in melee combat
+                    if (sw.cooldown <= 0) {
+                        sw.cooldown = UNITS.swordsman.attackInterval;
+                        sw.attackAnim = 1.0;
+                        laneEnemy.hp -= UNITS.swordsman.damage;
+                        laneEnemy.hitFlash = 0.16;
+                        sfx.playSword();
+
+                        const pt = laneDistToXY(geom, sw.lane, laneEnemy.dist, laneEnemy.lateral);
+                        spawnBurstParticles(pt.x, pt.y - 10, '#fde047', 6);
+                        addFloatingText(`-${UNITS.swordsman.damage}`, pt.x, pt.y - 26, '#ef4444', 17);
+
+                        // Swordsmen shatter Shield Orc shields on melee hit!
+                        if (laneEnemy.hasShield && laneEnemy.arrowResist > 0) {
+                            laneEnemy.hasShield = false;
+                            laneEnemy.arrowResist = 0;
+                            sfx.playShieldBreak();
+                            addFloatingText('SHIELD BROKEN!', pt.x, pt.y - 42, '#38bdf8', 14);
+                        }
+                    }
+                } else if (laneEnemy && laneEnemy.dist < sw.guardDist + 0.16) {
+                    // Step toward enemy near the bridge
+                    const dir = Math.sign(laneEnemy.dist - sw.dist);
+                    sw.dist += dir * UNITS.swordsman.speed * dt;
+                } else {
+                    // March toward assigned bridge guard post
+                    const targetDist = sw.guardDist || UNITS.swordsman.guardDist;
+                    if (Math.abs(targetDist - sw.dist) > 0.01) {
+                        sw.dist += Math.sign(targetDist - sw.dist) * UNITS.swordsman.speed * dt;
+                    }
+                }
+
+                if (sw.hp <= 0) {
+                    const pt = laneDistToXY(geom, sw.lane, sw.dist, sw.lateral);
+                    spawnBurstParticles(pt.x, pt.y - 8, '#38bdf8', 10);
+                    game.swordsmen.splice(i, 1);
+                }
+            }
+
+            // 7. Update Enemies Advancing on the 4 Roads
+            for (let i = game.enemies.length - 1; i >= 0; i--) {
+                const e = game.enemies[i];
+                if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt);
+                e.cooldown = Math.max(0, e.cooldown - dt);
+
+                if (e.hp <= 0) {
+                    const pt = laneDistToXY(geom, e.lane, e.dist, e.lateral);
+                    game.gold += e.bounty;
+                    game.totalKills += 1;
+                    sfx.playGold();
+                    spawnBurstParticles(pt.x, pt.y - 10, '#fbbf24', 12);
+                    addFloatingText(`+${e.bounty}g`, pt.x, pt.y - 28, '#fde047', 17);
+                    pulseGoldBadge();
+                    game.enemies.splice(i, 1);
+                    continue;
+                }
+
+                // Check if blocked by a Swordsman on this lane
+                let blocker = null;
+                for (let j = 0; j < game.swordsmen.length; j++) {
+                    const sw = game.swordsmen[j];
+                    if (sw.lane === e.lane && sw.hp > 0 && Math.abs(e.dist - sw.dist) <= 0.068) {
+                        blocker = sw;
+                        break;
+                    }
+                }
+
+                if (blocker) {
+                    if (e.cooldown <= 0) {
+                        e.cooldown = e.attackInterval;
+                        blocker.hp -= e.damage;
+                        const pt = laneDistToXY(geom, e.lane, blocker.dist, blocker.lateral);
+                        addFloatingText(`-${e.damage}`, pt.x, pt.y - 22, '#fb923c', 14);
+                    }
+                } else if (e.dist > 0.08) {
+                    e.dist = Math.max(0.08, e.dist - e.speed * dt);
+                } else {
+                    // Enemy has reached the Castle gate!
+                    if (e.cooldown <= 0) {
+                        e.cooldown = e.attackInterval;
+                        game.castleHp = Math.max(0, game.castleHp - e.damage);
+                        sfx.playCastleHit();
+                        const gatePt = laneDistToXY(geom, e.lane, 0.06, 0);
+                        spawnBurstParticles(gatePt.x, gatePt.y, '#ef4444', 8);
+                        addFloatingText(`-${e.damage} HP`, gatePt.x, gatePt.y - 24, '#ef4444', 17);
+
+                        if (game.castleHp <= 0) {
+                            game.gameOver = true;
+                            showEndGameModal(false);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // 8. Update Particles & Floating Damage/Gold Popups
+            for (let i = game.particles.length - 1; i >= 0; i--) {
+                const p = game.particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.vy += 120 * dt;
+                p.life -= dt;
+                if (p.life <= 0) game.particles.splice(i, 1);
+            }
+
+            for (let i = game.floatingTexts.length - 1; i >= 0; i--) {
+                const ft = game.floatingTexts[i];
+                ft.y -= 28 * dt;
+                ft.life -= dt;
+                if (ft.life <= 0) game.floatingTexts.splice(i, 1);
+            }
+
+            updateHudDom();
+        }
+
+        function spawnBurstParticles(x, y, color, count = 8) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const spd = 30 + Math.random() * 85;
+                game.particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * spd,
+                    vy: Math.sin(angle) * spd - 35,
+                    color,
+                    size: 2.5 + Math.random() * 2.5,
+                    life: 0.35 + Math.random() * 0.25
+                });
+            }
+        }
+
+        function addFloatingText(text, x, y, color = '#ffffff', size = 16) {
+            game.floatingTexts.push({
+                text, x, y, color, size,
+                life: 0.95,
+                maxLife: 0.95
+            });
+        }
+
+        function pulseGoldBadge() {
+            const el = document.getElementById('goldBadge');
+            if (!el) return;
+            el.classList.remove('gold-pulse');
+            void el.offsetWidth;
+            el.classList.add('gold-pulse');
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 10. HUD SYNCHRONIZATION
+        // ------------------------------------------------------------------------------------
+        function updateHudDom() {
+            const hpPct = Math.max(0, Math.round((game.castleHp / game.maxCastleHp) * 100));
+            const hpBar = document.getElementById('castleHpBar');
+            const hpTxt = document.getElementById('castleHpText');
+            if (hpBar) hpBar.style.width = `${hpPct}%`;
+            if (hpTxt) hpTxt.textContent = `${hpPct}%`;
+
+            const goldTxt = document.getElementById('goldText');
+            if (goldTxt) goldTxt.textContent = Math.floor(game.gold);
+
+            const waveTxt = document.getElementById('waveText');
+            if (waveTxt) waveTxt.textContent = game.wave;
+
+            // Center deployment / lane status bar
+            const centerBar = document.getElementById('centerStatusBar');
+            const centerTxt = document.getElementById('centerStatusText');
+            const selMeta = LANE_META[game.selectedLane] || LANE_META[0];
+
+            if (centerBar && centerTxt) {
+                if (game.deployment) {
+                    const pct = Math.max(0, Math.min(100, ((game.deployment.total - game.deployment.remaining) / game.deployment.total) * 100));
+                    centerBar.style.width = `${pct}%`;
+                    centerBar.style.background = 'linear-gradient(180deg, #38bdf8 0%, #0284c7 55%, #0369a1 100%)';
+                    const targetLane = LANE_META[game.deployment.lane];
+                    centerTxt.textContent = `DEPLOYING ${game.deployment.type.toUpperCase()} TO ${targetLane.code} (${game.deployment.remaining.toFixed(1)}s)`;
+                } else {
+                    centerBar.style.width = '100%';
+                    centerBar.style.background = 'linear-gradient(180deg, #f87171 0%, #dc2626 55%, #991b1b 100%)';
+                    const towerCount = game.archers[game.selectedLane].length;
+                    centerTxt.textContent = `${selMeta.name} SELECTED • TOWER ARCHERS: ${towerCount}/3`;
+                }
+            }
+
+            // Update lane selector buttons (1-4)
+            for (let i = 0; i < 4; i++) {
+                const btn = document.getElementById(`laneBtn${i}`);
+                if (!btn) continue;
+                if (game.selectedLane === i) {
+                    btn.className = 'px-2.5 py-0.5 rounded-full text-xs font-cartoon-sm border-2 bg-sky-500 text-white border-amber-300 shadow scale-105 transition-all';
+                } else {
+                    btn.className = 'px-2.5 py-0.5 rounded-full text-xs font-cartoon-sm border-2 bg-slate-900/80 text-slate-300 border-slate-700 hover:border-sky-400 transition-all';
+                }
+            }
+
+            // Update bottom unit cards
+            const archerBtn = document.getElementById('archerCardBtn');
+            const swordsmanBtn = document.getElementById('swordsmanCardBtn');
+            const archerCountBadge = document.getElementById('archerTowerCountBadge');
+            const swordsmanCountBadge = document.getElementById('swordsmanLaneCountBadge');
+
+            const selTowerArchers = game.archers[game.selectedLane].length;
+            const selLaneSwords = game.swordsmen.filter(s => s.lane === game.selectedLane).length;
+
+            if (archerCountBadge) archerCountBadge.textContent = `${selTowerArchers}/3`;
+            if (swordsmanCountBadge) swordsmanCountBadge.textContent = `${selLaneSwords}`;
+
+            const archerLocked = game.deployment !== null || game.gold < UNITS.archer.cost || selTowerArchers >= UNITS.archer.maxPerTower;
+            const swordLocked = game.deployment !== null || game.gold < UNITS.swordsman.cost;
+
+            if (archerBtn) archerBtn.classList.toggle('locked-card', archerLocked);
+            if (swordsmanBtn) swordsmanBtn.classList.toggle('locked-card', swordLocked);
+
+            const bottomBanner = document.getElementById('bottomHintBanner');
+            if (bottomBanner) {
+                if (game.deployment) {
+                    bottomBanner.textContent = `Deploying ${game.deployment.type.toUpperCase()} to ${ LANE_META[game.deployment.lane].name } (${game.deployment.remaining.toFixed(1)}s)...`;
+                } else {
+                    bottomBanner.textContent = `Target: ${selMeta.name} • Click ARCHER (50g) or SWORDSMAN (75g) to deploy`;
+                }
+            }
+        }
+
+        function showEndGameModal(isVictory) {
+            const modal = document.getElementById('endGameModal');
+            const title = document.getElementById('endGameTitle');
+            const sub = document.getElementById('endGameSubtitle');
+            const statWave = document.getElementById('endStatWave');
+            const statKills = document.getElementById('endStatKills');
+            const statGold = document.getElementById('endStatGold');
+
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            if (title) {
+                title.textContent = isVictory ? 'BASTION VICTORIOUS!' : 'CASTLE BREACHED!';
+                title.className = isVictory
+                    ? 'font-cartoon text-3xl sm:text-4xl text-amber-300 mb-2'
+                    : 'font-cartoon text-3xl sm:text-4xl text-rose-400 mb-2';
+            }
+            if (sub) {
+                sub.textContent = isVictory
+                    ? 'All 20 waves of the siege have been repelled across all four roads!'
+                    : 'Enemy forces overwhelmed the central keep. Regroup and fortify your lanes!';
+            }
+            if (statWave) statWave.textContent = `${game.wave} / ${game.maxWaves}`;
+            if (statKills) statKills.textContent = `${game.totalKills}`;
+            if (statGold) statGold.textContent = `${Math.floor(game.gold)}g`;
+
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        }
+        // ------------------------------------------------------------------------------------
+        // 11. ART TOOLKIT & CACHED STATIC LAYERS (ground, castle, forest)
+        // ------------------------------------------------------------------------------------
+        const INK = '#262335';
+        const STONE      = { l: '#a7b0bb', r: '#7f8895', t: '#c6cdd6' };
+        const STONE_KEEP = { l: '#b0b9c4', r: '#87909d', t: '#cdd4dc' };
+        const STONE_CAP  = { l: '#bac2cc', r: '#8f98a5', t: '#dce1e7' };
+        const COBBLES = ['#cdc8bc', '#c1bcaf', '#b5b0a3', '#d6d2c7', '#aca79b', '#c7c0b0'];
+
+        function makeRng(seed) {
+            let s = seed;
+            return () => {
+                s = (s * 16807) % 2147483647;
+                return (s - 1) / 2147483646;
+            };
+        }
+
+        function pathPts(c, pts) {
+            c.beginPath();
+            c.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+            c.closePath();
+        }
+
+        function paint(c, fill, stroke, lw) {
+            if (fill) { c.fillStyle = fill; c.fill(); }
+            if (stroke) { c.strokeStyle = stroke; c.lineWidth = lw; c.stroke(); }
+        }
+
+        function ell(c, x, y, rx, ry) {
+            c.beginPath();
+            c.ellipse(x, y, Math.max(0.01, rx), Math.max(0.01, ry), 0, 0, Math.PI * 2);
+        }
+
+        function blobPath(c, x, y, rx, ry, rand, n = 10, jitter = 0.3) {
+            const pts = [];
+            for (let k = 0; k < n; k++) {
+                const a = (k / n) * Math.PI * 2;
+                const r = 1 - jitter * 0.5 + rand() * jitter;
+                pts.push({ x: x + Math.cos(a) * rx * r, y: y + Math.sin(a) * ry * r });
+            }
+            c.beginPath();
+            for (let k = 0; k < n; k++) {
+                const p = pts[k];
+                const q = pts[(k + 1) % n];
+                const mx = (p.x + q.x) / 2;
+                const my = (p.y + q.y) / 2;
+                if (k === 0) c.moveTo(mx, my);
+                const p2 = pts[(k + 1) % n];
+                const q2 = pts[(k + 2) % n];
+                c.quadraticCurveTo(p2.x, p2.y, (p2.x + q2.x) / 2, (p2.y + q2.y) / 2);
+            }
+            c.closePath();
+        }
+
+        function makeLayer(w, h) {
+            const cv = document.createElement('canvas');
+            cv.width = Math.max(1, Math.ceil(w));
+            cv.height = Math.max(1, Math.ceil(h));
+            return cv;
+        }
+
+        function screenToWorld(g, sx, sy) {
+            const X = (sx - g.cx) / g.A;
+            const Y = -(sy - g.cy) / g.B;
+            return { x: (X + Y) / 2, y: (Y - X) / 2 };
+        }
+
+        // True when a screen point is open meadow (clear of moat, roads and deploy rings)
+        function isOpenGround(g, sx, sy, margin) {
+            const wpt = screenToWorld(g, sx, sy);
+            if (Math.hypot(wpt.x, wpt.y) < g.R.moat + margin) return false;
+            if (Math.min(Math.abs(wpt.x), Math.abs(wpt.y)) < ROAD_HALF_W + margin) return false;
+            for (let i = 0; i < 4; i++) {
+                const ln = g.lanes[i];
+                if (Math.hypot(sx - ln.ringX, (sy - ln.ringY) * 1.6) < (ln.ringRadius + margin * g.scale) * 1.5) return false;
+            }
+            return true;
+        }
+
+        let artCache = {};
+        function getArt(g) {
+            const key = g.w + 'x' + g.h;
+            let art = artCache[key];
+            if (!art) {
+                if (Object.keys(artCache).length >= 3) artCache = {};
+                art = artCache[key] = {
+                    ground: buildGroundLayer(g),
+                    castle: buildCastleLayer(g),
+                    trees: buildForestLayer(g),
+                    sparkles: buildWaterSparkles(g)
+                };
+            }
+            return art;
+        }
+
+        // ---------- Cobblestone strip along a lane (flat road or arched bridge deck) ----------
+        function drawCobbleStrip(c, g, lane, r0, r1, hw, zf, rand) {
+            const s = g.scale;
+            const W = (r, l) => g.P(lane.ax * r + lane.lx * l, lane.ay * r + lane.ly * l, zf ? zf(r) : 0);
+            const n = Math.max(1, Math.ceil((r1 - r0) / 8));
+            const a = [];
+            const b = [];
+            for (let k = 0; k <= n; k++) {
+                const r = r0 + (r1 - r0) * (k / n);
+                a.push(W(r, -hw));
+                b.push(W(r, hw));
+            }
+            pathPts(c, a.concat(b.reverse()));
+            paint(c, '#7d776e', INK, 2.6 * s);
+
+            const step = 10.5;
+            let row = 0;
+            for (let r = r0 + 0.6; r < r1 - 2; r += step, row++) {
+                const ra = r + 1.2;
+                const rb = Math.min(r + step - 1.2, r1 - 1.2);
+                if (rb - ra < 2) continue;
+                const edges = (row % 2) ? [-1, -0.5, 0, 0.5, 1] : [-1, -0.75, -0.25, 0.25, 0.75, 1];
+                for (let j = 0; j < edges.length - 1; j++) {
+                    const la = edges[j] * hw + (j === 0 ? 2.2 : 1.2);
+                    const lb = edges[j + 1] * hw - (j === edges.length - 2 ? 2.2 : 1.2);
+                    const col = COBBLES[Math.floor(rand() * COBBLES.length)];
+                    pathPts(c, [W(ra, la), W(rb, la), W(rb, lb), W(ra, lb)]);
+                    paint(c, col, col, 1.1 * s);
+                }
+            }
+        }
+
+        // ---------- Arched stone bridge across the moat ----------
+        function drawStoneBridge(c, g, lane, rand) {
+            const s = g.scale;
+            const r0 = g.R.island - 6;
+            const r1 = g.R.moat + 6;
+            const hw = ROAD_HALF_W + 4;
+            const ph = 7;
+            const wl = WATER_DROP;
+            const ns = lane.nearSign;
+            const N = 26;
+            const zf = (r) => bridgeLift(g, r);
+            const W = (r, l, z) => g.P(lane.ax * r + lane.lx * l, lane.ay * r + lane.ly * l, z);
+            const rs = [];
+            for (let k = 0; k <= N; k++) rs.push(r0 + (r1 - r0) * (k / N));
+            const sideCol = lane.ax !== 0 ? STONE.r : STONE.l;
+
+            // Shadow cast on the water
+            let pts = rs.map(r => W(r, ns * (hw - 2), -wl)).concat(rs.slice().reverse().map(r => W(r, ns * (hw + 15), -wl)));
+            pathPts(c, pts);
+            paint(c, 'rgba(10, 35, 85, 0.32)');
+
+            // Cobbled deck
+            drawCobbleStrip(c, g, lane, r0, r1, hw - 3, zf, rand);
+
+            // Far parapet (inner face + cap)
+            pts = rs.map(r => W(r, -ns * (hw - 3), zf(r))).concat(rs.slice().reverse().map(r => W(r, -ns * (hw - 3), zf(r) + ph)));
+            pathPts(c, pts);
+            paint(c, sideCol, INK, 2 * s);
+            pts = rs.map(r => W(r, -ns * (hw - 3), zf(r) + ph)).concat(rs.slice().reverse().map(r => W(r, -ns * hw, zf(r) + ph)));
+            pathPts(c, pts);
+            paint(c, STONE.t, INK, 2 * s);
+
+            // Near side wall
+            pts = rs.map(r => W(r, ns * hw, zf(r) + ph));
+            pts.push(W(r1, ns * hw, -wl), W(r0, ns * hw, -wl));
+            pathPts(c, pts);
+            paint(c, sideCol, INK, 2.6 * s);
+
+            // Masonry courses following the curve of the deck
+            c.strokeStyle = 'rgba(38, 35, 53, 0.24)';
+            c.lineWidth = 1 * s;
+            for (let j = 1; j <= 2; j++) {
+                c.beginPath();
+                rs.forEach((r, k) => {
+                    const p = W(r, ns * hw, Math.max(-wl + 1, zf(r) + ph - j * 7.5));
+                    if (k === 0) c.moveTo(p.x, p.y); else c.lineTo(p.x, p.y);
+                });
+                c.stroke();
+            }
+            c.beginPath();
+            for (let k = 1; k < N; k += 2) {
+                const r = rs[k];
+                const p0 = W(r, ns * hw, zf(r) + ph);
+                const p1 = W(r, ns * hw, zf(r) + ph - 7.5);
+                c.moveTo(p0.x, p0.y);
+                c.lineTo(p1.x, p1.y);
+            }
+            c.stroke();
+
+            // Arch opening
+            const span = g.R.moat - g.R.island;
+            const archPts = [];
+            const holeH = wl + BRIDGE_LIFT - 6;
+            for (let k = 0; k <= 18; k++) {
+                const th = (k / 18) * Math.PI;
+                const t = 0.5 - 0.31 * Math.cos(th);
+                archPts.push(W(g.R.island + span * t, ns * hw, -wl + holeH * Math.sin(th)));
+            }
+            const topY = archPts[9].y;
+            const botY = archPts[0].y;
+            const hole = c.createLinearGradient(0, topY, 0, Math.max(botY, archPts[18].y));
+            hole.addColorStop(0, '#0d2145');
+            hole.addColorStop(1, '#1f55a3');
+            pathPts(c, archPts);
+            paint(c, hole);
+            c.beginPath();
+            archPts.forEach((p, k) => { if (k === 0) c.moveTo(p.x, p.y); else c.lineTo(p.x, p.y); });
+            c.strokeStyle = INK;
+            c.lineWidth = 6.4 * s;
+            c.stroke();
+            c.strokeStyle = '#ccd2da';
+            c.lineWidth = 3.4 * s;
+            c.stroke();
+            // Voussoir joints
+            c.strokeStyle = 'rgba(38, 35, 53, 0.55)';
+            c.lineWidth = 1 * s;
+            c.beginPath();
+            for (let k = 1; k < 18; k += 2) {
+                const p = archPts[k];
+                const q = archPts[k + 1] || p;
+                const nx = -(q.y - archPts[k - 1].y);
+                const ny = (q.x - archPts[k - 1].x);
+                const nl = Math.hypot(nx, ny) || 1;
+                c.moveTo(p.x - (nx / nl) * 1.7 * s, p.y - (ny / nl) * 1.7 * s);
+                c.lineTo(p.x + (nx / nl) * 1.7 * s, p.y + (ny / nl) * 1.7 * s);
+            }
+            c.stroke();
+
+            // Near parapet cap
+            pts = rs.map(r => W(r, ns * hw, zf(r) + ph)).concat(rs.slice().reverse().map(r => W(r, ns * (hw - 3), zf(r) + ph)));
+            pathPts(c, pts);
+            paint(c, STONE_CAP.t, INK, 2 * s);
+        }
+
+        // ---------- Ground layer: meadow, dirt, roads, moat, island, bridges ----------
+        function buildGroundLayer(g) {
+            const cv = makeLayer(g.w, g.h);
+            const c = cv.getContext('2d');
+            const s = g.scale;
+            const rand = makeRng(4242);
+            const { w, h, cx, cy } = g;
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+
+            // Meadow
+            c.fillStyle = '#5fb832';
+            c.fillRect(0, 0, w, h);
+            for (let i = 0; i < 54; i++) {
+                const rx = (45 + rand() * 95) * s;
+                blobPath(c, rand() * w, rand() * h, rx, rx * (0.32 + rand() * 0.22), rand, 9, 0.35);
+                paint(c, (i % 2) ? 'rgba(150, 222, 76, 0.24)' : 'rgba(48, 138, 34, 0.20)');
+            }
+            const vig = c.createRadialGradient(cx, cy, Math.min(w, h) * 0.42, cx, cy, Math.hypot(w, h) * 0.56);
+            vig.addColorStop(0, 'rgba(24, 80, 24, 0)');
+            vig.addColorStop(1, 'rgba(24, 80, 24, 0.42)');
+            c.fillStyle = vig;
+            c.fillRect(0, 0, w, h);
+
+            // Dirt patches
+            let placed = 0;
+            for (let tries = 0; tries < 260 && placed < 10; tries++) {
+                const x = rand() * w;
+                const y = rand() * h;
+                const rx = (36 + rand() * 40) * s;
+                const ry = rx * (0.4 + rand() * 0.15);
+                if (!isOpenGround(g, x, y, 34) || !isOpenGround(g, x - rx, y, 6) || !isOpenGround(g, x + rx, y, 6)) continue;
+                placed++;
+                const seed = Math.floor(rand() * 1e6) + 1;
+                blobPath(c, x, y, rx, ry, makeRng(seed), 10, 0.36);
+                paint(c, '#d2ac6c', '#a47b3d', 2.6 * s);
+                blobPath(c, x - rx * 0.1, y - ry * 0.14, rx * 0.62, ry * 0.56, makeRng(seed + 7), 9, 0.3);
+                paint(c, '#e0c189');
+                for (let k = 0; k < 5; k++) {
+                    ell(c, x + (rand() - 0.5) * rx * 1.1, y + (rand() - 0.5) * ry * 0.9, 1.8 * s, 1.2 * s);
+                    paint(c, '#b48d50');
+                }
+            }
+
+            // Grass tufts & wildflowers
+            for (let i = 0; i < 230; i++) {
+                const x = rand() * w;
+                const y = rand() * h;
+                if (!isOpenGround(g, x, y, 6)) continue;
+                c.strokeStyle = (i % 3 === 0) ? '#93dd55' : '#3c9124';
+                c.lineWidth = 1.6 * s;
+                c.beginPath();
+                c.moveTo(x - 3.2 * s, y - 3.6 * s); c.lineTo(x - 1 * s, y);
+                c.moveTo(x, y - 5 * s); c.lineTo(x, y);
+                c.moveTo(x + 3.2 * s, y - 3.6 * s); c.lineTo(x + 1 * s, y);
+                c.stroke();
+            }
+            const petals = ['#ffffff', '#fff3a3', '#ffffff', '#ffd1e8'];
+            for (let i = 0; i < 110; i++) {
+                const x = rand() * w;
+                const y = rand() * h;
+                if (!isOpenGround(g, x, y, 8)) continue;
+                ell(c, x, y, 2.3 * s, 2.3 * s);
+                paint(c, petals[i % petals.length], 'rgba(38, 90, 30, 0.55)', 0.9 * s);
+                ell(c, x, y, 0.9 * s, 0.9 * s);
+                paint(c, '#f5b82e');
+            }
+
+            // Outer cobblestone roads
+            for (let i = 0; i < 4; i++) {
+                drawCobbleStrip(c, g, g.lanes[i], g.R.moat - 6, g.endR + 80, ROAD_HALF_W, null, rand);
+            }
+
+            // Moat: earth bank, then water
+            const mrx = g.moatOuterRx;
+            const mry = g.moatOuterRy;
+            const drop = WATER_DROP * s;
+            ell(c, cx, cy, mrx + 3 * s, mry + 3 * s);
+            paint(c, '#4a9a26');
+            ell(c, cx, cy, mrx, mry);
+            paint(c, '#9a6a37');
+            c.save();
+            ell(c, cx, cy, mrx, mry);
+            c.clip();
+            ell(c, cx, cy + drop * 0.55, mrx, mry);
+            paint(c, '#74491f');
+            ell(c, cx, cy + drop, mrx, mry);
+            paint(c, '#2e86e2', '#1b4f9c', 3 * s);
+            ell(c, cx, cy + drop + 3.5 * s, mrx - 5 * s, mry - 4 * s);
+            paint(c, null, 'rgba(150, 215, 255, 0.55)', 2.2 * s);
+            // Deeper tone toward the middle of the channel
+            ell(c, cx, cy + drop, (mrx + g.islandRx) * 0.5 + 16 * s, (mry + g.islandRy) * 0.5 + 16 * s * g.slope);
+            paint(c, '#2674d4');
+            // Ripples
+            for (let i = 0; i < 60; i++) {
+                const ang = rand() * Math.PI * 2;
+                const rr = g.R.island + 14 + rand() * (g.R.moat - g.R.island - 26);
+                const p = g.P(Math.cos(ang) * rr, Math.sin(ang) * rr, -WATER_DROP);
+                const len = (5 + rand() * 9) * s;
+                c.strokeStyle = (i % 3 === 0) ? 'rgba(20, 70, 160, 0.45)' : 'rgba(170, 225, 255, 0.5)';
+                c.lineWidth = 1.7 * s;
+                c.beginPath();
+                c.moveTo(p.x - len, p.y);
+                c.quadraticCurveTo(p.x, p.y - 2.4 * s, p.x + len, p.y);
+                c.stroke();
+            }
+            c.restore();
+            ell(c, cx, cy, mrx, mry);
+            paint(c, null, INK, 2.8 * s);
+
+            // Island: cliff + lawn
+            const irx = g.islandRx;
+            const iry = g.islandRy;
+            ell(c, cx, cy + drop + 7 * s, irx + 5 * s, iry + 4 * s);
+            paint(c, 'rgba(12, 45, 105, 0.35)');
+            c.beginPath();
+            c.ellipse(cx, cy + drop, irx, iry, 0, 0, Math.PI);
+            c.lineTo(cx - irx, cy);
+            c.lineTo(cx + irx, cy);
+            c.closePath();
+            paint(c, '#8a5a2c', INK, 2.8 * s);
+            c.save();
+            c.beginPath();
+            c.rect(cx - irx, cy, irx * 2, iry + drop + 4);
+            c.clip();
+            ell(c, cx, cy + drop * 0.5, irx, iry);
+            paint(c, null, 'rgba(60, 34, 12, 0.5)', 1.6 * s);
+            c.restore();
+            ell(c, cx, cy, irx, iry);
+            paint(c, '#66c038', INK, 2.8 * s);
+            ell(c, cx, cy - 2 * s, irx - 7 * s, iry - 6 * s);
+            paint(c, null, 'rgba(160, 232, 96, 0.5)', 3 * s);
+            for (let i = 0; i < 26; i++) {
+                const ang = rand() * Math.PI * 2;
+                const rr = 70 + rand() * (g.R.island - 80);
+                const wx = Math.cos(ang) * rr;
+                const wy = Math.sin(ang) * rr;
+                if (Math.min(Math.abs(wx), Math.abs(wy)) < ROAD_HALF_W + 6) continue;
+                const p = g.P(wx, wy);
+                c.strokeStyle = '#3c9124';
+                c.lineWidth = 1.5 * s;
+                c.beginPath();
+                c.moveTo(p.x - 3 * s, p.y - 3.4 * s); c.lineTo(p.x - 1 * s, p.y);
+                c.moveTo(p.x + 3 * s, p.y - 3.4 * s); c.lineTo(p.x + 1 * s, p.y);
+                c.stroke();
+            }
+
+            // Castle ground shadow
+            const sh = g.P(-12, -12);
+            ell(c, sh.x, sh.y, Math.SQRT2 * g.A * 96, Math.SQRT2 * g.B * 96);
+            paint(c, 'rgba(22, 60, 20, 0.26)');
+
+            // Island roads, then bridges (back pair first)
+            for (let i = 0; i < 4; i++) {
+                drawCobbleStrip(c, g, g.lanes[i], 60, g.R.island + 1, ROAD_HALF_W, null, rand);
+            }
+            for (let i = 0; i < 4; i++) {
+                drawStoneBridge(c, g, g.lanes[i], rand);
+            }
+            return cv;
+        }
+
+        function buildWaterSparkles(g) {
+            const rand = makeRng(977);
+            const out = [];
+            for (let tries = 0; tries < 200 && out.length < 16; tries++) {
+                const ang = rand() * Math.PI * 2;
+                const rr = g.R.island + 16 + rand() * (g.R.moat - g.R.island - 32);
+                const wx = Math.cos(ang) * rr;
+                const wy = Math.sin(ang) * rr;
+                if (Math.min(Math.abs(wx), Math.abs(wy)) < ROAD_HALF_W + 22) continue;
+                const p = g.P(wx, wy, -WATER_DROP);
+                out.push({ x: p.x, y: p.y, ph: rand() * 6.28, sp: 1.1 + rand() * 1.2 });
+            }
+            return out;
+        }
+
+        // ---------- Isometric masonry primitives ----------
+        function brickFace(c, g, p0, p1, z0, z1, rand) {
+            const s = g.scale;
+            const len = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            const bh = 7;
+            const bw = 12;
+            const rows = Math.max(1, Math.round((z1 - z0) / bh));
+            const rh = (z1 - z0) / rows;
+            const at = (d, z) => g.P(p0.x + (p1.x - p0.x) * (d / len), p0.y + (p1.y - p0.y) * (d / len), z);
+
+            const accents = Math.floor((len * (z1 - z0)) / 330);
+            for (let k = 0; k < accents; k++) {
+                const j = Math.floor(rand() * rows);
+                const off = (j % 2) * bw * 0.5;
+                const col = Math.floor(rand() * (len / bw));
+                const d0 = Math.max(0, off + col * bw - bw * 0.5);
+                const d1 = Math.min(len, d0 + bw);
+                if (d1 - d0 < 4) continue;
+                pathPts(c, [at(d0, z0 + j * rh), at(d1, z0 + j * rh), at(d1, z0 + (j + 1) * rh), at(d0, z0 + (j + 1) * rh)]);
+                paint(c, rand() < 0.5 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(30, 32, 60, 0.12)');
+            }
+
+            c.beginPath();
+            for (let j = 1; j < rows; j++) {
+                const a = at(0, z0 + j * rh);
+                const b = at(len, z0 + j * rh);
+                c.moveTo(a.x, a.y);
+                c.lineTo(b.x, b.y);
+            }
+            for (let j = 0; j < rows; j++) {
+                for (let d = (j % 2) * bw * 0.5 + bw * 0.5; d < len - 1.5; d += bw) {
+                    const a = at(d, z0 + j * rh);
+                    const b = at(d, z0 + (j + 1) * rh);
+                    c.moveTo(a.x, a.y);
+                    c.lineTo(b.x, b.y);
+                }
+            }
+            c.strokeStyle = 'rgba(38, 35, 53, 0.24)';
+            c.lineWidth = 1 * s;
+            c.stroke();
+        }
+
+        function isoBox(c, g, x0, y0, x1, y1, z0, z1, pal, opt) {
+            const P = g.P;
+            const lw = (opt && opt.lw ? opt.lw : 2.2) * g.scale;
+            pathPts(c, [P(x0, y1, z0), P(x0, y0, z0), P(x0, y0, z1), P(x0, y1, z1)]);
+            paint(c, pal.l);
+            if (opt && opt.rand) brickFace(c, g, { x: x0, y: y1 }, { x: x0, y: y0 }, z0, z1, opt.rand);
+            pathPts(c, [P(x0, y1, z0), P(x0, y0, z0), P(x0, y0, z1), P(x0, y1, z1)]);
+            paint(c, null, INK, lw);
+
+            pathPts(c, [P(x0, y0, z0), P(x1, y0, z0), P(x1, y0, z1), P(x0, y0, z1)]);
+            paint(c, pal.r);
+            if (opt && opt.rand) brickFace(c, g, { x: x0, y: y0 }, { x: x1, y: y0 }, z0, z1, opt.rand);
+            pathPts(c, [P(x0, y0, z0), P(x1, y0, z0), P(x1, y0, z1), P(x0, y0, z1)]);
+            paint(c, null, INK, lw);
+
+            pathPts(c, [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)]);
+            paint(c, pal.t, INK, lw);
+        }
+
+        // Crenellations around the rim of a box top. sides: string containing any of b (back) / f (front)
+        function drawMerlons(c, g, x0, y0, x1, y1, z, which) {
+            const d = 4.5;
+            const mh = 6.5;
+            const o = { lw: 1.7 };
+            const row = (len) => {
+                const n = Math.max(2, Math.round(len / 11.5));
+                return { n, m: len / (2 * n - 1) };
+            };
+            const rx = row(x1 - x0);
+            const ry = row(y1 - y0);
+            if (which.includes('b')) {
+                for (let i = ry.n - 1; i >= 0; i--) {   // back-right edge (x = x1)
+                    const ya = y0 + i * 2 * ry.m;
+                    isoBox(c, g, x1 - d, ya, x1, ya + ry.m, z, z + mh, STONE_CAP, o);
+                }
+                for (let i = rx.n - 1; i >= 0; i--) {   // back-left edge (y = y1)
+                    const xa = x0 + i * 2 * rx.m;
+                    isoBox(c, g, xa, y1 - d, xa + rx.m, y1, z, z + mh, STONE_CAP, o);
+                }
+            }
+            if (which.includes('f')) {
+                for (let i = ry.n - 1; i >= 0; i--) {   // front-left edge (x = x0)
+                    const ya = y0 + i * 2 * ry.m;
+                    isoBox(c, g, x0, ya, x0 + d, ya + ry.m, z, z + mh, STONE_CAP, o);
+                }
+                for (let i = rx.n - 1; i >= 0; i--) {   // front-right edge (y = y0)
+                    const xa = x0 + i * 2 * rx.m;
+                    isoBox(c, g, xa, y0, xa + rx.m, y0 + d, z, z + mh, STONE_CAP, o);
+                }
+            }
+        }
+
+        // Helpers that decorate a wall face running from world point p0 to p1
+        function facePoint(g, p0, p1, d, z) {
+            const len = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+            return g.P(p0.x + (p1.x - p0.x) * (d / len), p0.y + (p1.y - p0.y) * (d / len), z);
+        }
+
+        function drawArrowSlit(c, g, p0, p1, d, z) {
+            pathPts(c, [
+                facePoint(g, p0, p1, d - 1.5, z), facePoint(g, p0, p1, d + 1.5, z),
+                facePoint(g, p0, p1, d + 1.5, z + 9), facePoint(g, p0, p1, d - 1.5, z + 9)
+            ]);
+            paint(c, '#1d1b2b', '#dfe4ea', 1 * g.scale);
+        }
+
+        function drawWallBanner(c, g, p0, p1, d, zTop) {
+            const s = g.scale;
+            pathPts(c, [
+                facePoint(g, p0, p1, d - 4, zTop), facePoint(g, p0, p1, d + 4, zTop),
+                facePoint(g, p0, p1, d + 4, zTop - 11), facePoint(g, p0, p1, d, zTop - 15),
+                facePoint(g, p0, p1, d - 4, zTop - 11)
+            ]);
+            paint(c, '#2f6fe0', INK, 1.6 * s);
+            pathPts(c, [
+                facePoint(g, p0, p1, d - 4, zTop), facePoint(g, p0, p1, d + 4, zTop),
+                facePoint(g, p0, p1, d + 4, zTop - 3), facePoint(g, p0, p1, d - 4, zTop - 3)
+            ]);
+            paint(c, '#f2c94c', INK, 1.2 * s);
+            const dot = facePoint(g, p0, p1, d, zTop - 8.5);
+            ell(c, dot.x, dot.y, 1.5 * s, 1.5 * s);
+            paint(c, '#bfdbfe');
+        }
+
+        function drawGate(c, g, p0, p1, d, halfW, hs, rz) {
+            const s = g.scale;
+            const arch = (hw, straight, rise) => {
+                const pts = [facePoint(g, p0, p1, d - hw, 0), facePoint(g, p0, p1, d - hw, straight)];
+                for (let k = 1; k < 12; k++) {
+                    const th = (k / 12) * Math.PI;
+                    pts.push(facePoint(g, p0, p1, d - hw * Math.cos(th), straight + rise * Math.sin(th)));
+                }
+                pts.push(facePoint(g, p0, p1, d + hw, straight), facePoint(g, p0, p1, d + hw, 0));
+                return pts;
+            };
+            pathPts(c, arch(halfW + 3, hs, rz + 3));
+            paint(c, '#d5dae1', INK, 2 * s);
+            pathPts(c, arch(halfW, hs, rz));
+            paint(c, '#7b4a22', INK, 2 * s);
+            c.strokeStyle = '#55310f';
+            c.lineWidth = 1.1 * s;
+            c.beginPath();
+            for (let k = -2; k <= 2; k++) {
+                const dd = d + (k / 3) * halfW;
+                const top = hs + rz * Math.sqrt(Math.max(0, 1 - Math.pow((dd - d) / halfW, 2)));
+                const a = facePoint(g, p0, p1, dd, 0.5);
+                const b = facePoint(g, p0, p1, dd, top - 0.8);
+                c.moveTo(a.x, a.y);
+                c.lineTo(b.x, b.y);
+            }
+            c.stroke();
+            c.strokeStyle = '#2d2a3a';
+            c.lineWidth = 2 * s;
+            c.beginPath();
+            [hs * 0.3, hs * 0.85].forEach((z) => {
+                const a = facePoint(g, p0, p1, d - halfW + 0.8, z);
+                const b = facePoint(g, p0, p1, d + halfW - 0.8, z);
+                c.moveTo(a.x, a.y);
+                c.lineTo(b.x, b.y);
+            });
+            c.stroke();
+        }
+
+        // ---------- Castle layer: cross-shaped keep with four gate towers ----------
+        function buildCastleLayer(g) {
+            const s = g.scale;
+            const ox = g.cx - 172 * s;
+            const oy = g.cy - 222 * s;
+            const cv = makeLayer(344 * s, 316 * s);
+            const c = cv.getContext('2d');
+            c.translate(-ox, -oy);
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+            const rand = makeRng(9001);
+            const bricks = { rand };
+            const TZ = TOWER_TOP_Z;
+            const WZ = 30;
+            const KZ = 58;
+
+            const tower = (x0, y0, x1, y1) => {
+                isoBox(c, g, x0, y0, x1, y1, 0, TZ, STONE, bricks);
+                // Corbel band under the battlements
+                isoBox(c, g, x0 - 1.5, y0 - 1.5, x1 + 1.5, y1 + 1.5, TZ - 7, TZ, STONE_CAP, { lw: 1.8 });
+                pathPts(c, [g.P(x0 + 4, y0 + 4, TZ), g.P(x1 - 4, y0 + 4, TZ), g.P(x1 - 4, y1 - 4, TZ), g.P(x0 + 4, y1 - 4, TZ)]);
+                paint(c, '#aab2bd', 'rgba(38, 35, 53, 0.45)', 1.2 * s);
+                drawMerlons(c, g, x0 - 1.5, y0 - 1.5, x1 + 1.5, y1 + 1.5, TZ, 'bf');
+            };
+            const wall = (x0, y0, x1, y1, alongX) => {
+                isoBox(c, g, x0, y0, x1, y1, 0, WZ, STONE, bricks);
+                const d = 4;
+                const n = 4;
+                // Battlements only on the two long sides of the wall walk
+                if (alongX) {
+                    const m = (x1 - x0) / (2 * n - 1);
+                    for (let pass = 0; pass < 2; pass++) {
+                        for (let i = n - 1; i >= 0; i--) {
+                            const xa = x0 + i * 2 * m;
+                            if (pass === 0) isoBox(c, g, xa, y1 - d, xa + m, y1, WZ, WZ + 6, STONE_CAP, { lw: 1.7 });
+                            else isoBox(c, g, xa, y0, xa + m, y0 + d, WZ, WZ + 6, STONE_CAP, { lw: 1.7 });
+                        }
+                    }
+                } else {
+                    const m = (y1 - y0) / (2 * n - 1);
+                    for (let pass = 0; pass < 2; pass++) {
+                        for (let i = n - 1; i >= 0; i--) {
+                            const ya = y0 + i * 2 * m;
+                            if (pass === 0) isoBox(c, g, x1 - d, ya, x1, ya + m, WZ, WZ + 6, STONE_CAP, { lw: 1.7 });
+                            else isoBox(c, g, x0, ya, x0 + d, ya + m, WZ, WZ + 6, STONE_CAP, { lw: 1.7 });
+                        }
+                    }
+                }
+            };
+
+            // --- Back arms (NE along +x, NW along +y) ---
+            tower(66, -14, 94, 14);
+            drawArrowSlit(c, g, { x: 66, y: -14 }, { x: 94, y: -14 }, 14, 24);
+            drawArrowSlit(c, g, { x: 66, y: 14 }, { x: 66, y: -14 }, 14, 34);
+            wall(27, -11, 67, 11, true);
+            drawWallBanner(c, g, { x: 27, y: -11 }, { x: 67, y: -11 }, 22, 25);
+
+            tower(-14, 66, 14, 94);
+            drawArrowSlit(c, g, { x: -14, y: 94 }, { x: -14, y: 66 }, 14, 24);
+            drawArrowSlit(c, g, { x: -14, y: 66 }, { x: 14, y: 66 }, 14, 34);
+            wall(-11, 27, 11, 67, false);
+            drawWallBanner(c, g, { x: -11, y: 67 }, { x: -11, y: 27 }, 18, 25);
+
+            // --- Central keep ---
+            isoBox(c, g, -28, -28, 28, 28, 0, KZ, STONE_KEEP, bricks);
+            isoBox(c, g, -30, -30, 30, 30, KZ - 8, KZ, STONE_CAP, { lw: 1.8 });
+            // Timber roof deck
+            pathPts(c, [g.P(-23, -23, KZ), g.P(23, -23, KZ), g.P(23, 23, KZ), g.P(-23, 23, KZ)]);
+            paint(c, '#a5713f', INK, 1.8 * s);
+            c.strokeStyle = '#7c5129';
+            c.lineWidth = 1.1 * s;
+            c.beginPath();
+            for (let y = -17; y <= 17; y += 6) {
+                const a = g.P(-23, y, KZ);
+                const b = g.P(23, y, KZ);
+                c.moveTo(a.x, a.y);
+                c.lineTo(b.x, b.y);
+            }
+            c.stroke();
+            drawMerlons(c, g, -30, -30, 30, 30, KZ, 'bf');
+            // Keep face details (above the wall walks)
+            const kl0 = { x: -28, y: 28 };
+            const kl1 = { x: -28, y: -28 };
+            const kr0 = { x: -28, y: -28 };
+            const kr1 = { x: 28, y: -28 };
+            drawArrowSlit(c, g, kl0, kl1, 10, 30);
+            drawArrowSlit(c, g, kl0, kl1, 46, 30);
+            drawArrowSlit(c, g, kr0, kr1, 10, 30);
+            drawArrowSlit(c, g, kr0, kr1, 46, 30);
+            drawWallBanner(c, g, kl0, kl1, 28, 48);
+            drawWallBanner(c, g, kr0, kr1, 28, 48);
+
+            // Tall rear turret rising from the keep roof
+            isoBox(c, g, 2, 2, 24, 24, KZ, KZ + 26, STONE_KEEP, bricks);
+            isoBox(c, g, 0.5, 0.5, 25.5, 25.5, KZ + 20, KZ + 26, STONE_CAP, { lw: 1.8 });
+            drawMerlons(c, g, 0.5, 0.5, 25.5, 25.5, KZ + 26, 'bf');
+            drawArrowSlit(c, g, { x: 2, y: 24 }, { x: 2, y: 2 }, 11, KZ + 6);
+            drawArrowSlit(c, g, { x: 2, y: 2 }, { x: 24, y: 2 }, 11, KZ + 6);
+
+            // --- Front arms (SW along -x, SE along -y) with gates ---
+            wall(-67, -11, -27, 11, true);
+            drawWallBanner(c, g, { x: -67, y: -11 }, { x: -27, y: -11 }, 22, 25);
+            tower(-94, -14, -66, 14);
+            drawGate(c, g, { x: -94, y: 14 }, { x: -94, y: -14 }, 14, 7.5, 12, 8);
+            drawArrowSlit(c, g, { x: -94, y: 14 }, { x: -94, y: -14 }, 14, 31);
+            drawArrowSlit(c, g, { x: -94, y: -14 }, { x: -66, y: -14 }, 14, 24);
+
+            wall(-11, -67, 11, -27, false);
+            drawWallBanner(c, g, { x: -11, y: -27 }, { x: -11, y: -67 }, 18, 25);
+            tower(-14, -94, 14, -66);
+            drawGate(c, g, { x: -14, y: -94 }, { x: 14, y: -94 }, 14, 7.5, 12, 8);
+            drawArrowSlit(c, g, { x: -14, y: -94 }, { x: 14, y: -94 }, 14, 31);
+            drawArrowSlit(c, g, { x: -14, y: -66 }, { x: -14, y: -94 }, 14, 24);
+
+            // Flag pole anchors (drawn animated every frame)
+            const flags = [
+                { p: g.P(13, 13, KZ + 26), h: 30, big: true },
+                { p: g.P(90, 10, TZ + 6), h: 20 },
+                { p: g.P(10, 90, TZ + 6), h: 20 },
+                { p: g.P(-70, 10, TZ + 6), h: 20 },
+                { p: g.P(10, -70, TZ + 6), h: 20 }
+            ];
+            return { cv, ox, oy, flags };
+        }
+
+        // ---------- Forest layer: trees, bushes and boulders around the meadow ----------
+        function drawOakTree(c, rand) {
+            c.fillStyle = 'rgba(18, 60, 20, 0.30)';
+            ell(c, 4, 3, 23, 8);
+            c.fill();
+            c.beginPath();
+            c.moveTo(-6, 3);
+            c.quadraticCurveTo(-3, -8, -4.5, -22);
+            c.lineTo(4.5, -22);
+            c.quadraticCurveTo(3, -8, 7, 3);
+            c.closePath();
+            paint(c, '#8f5d2c', '#3a2414', 2.2);
+            c.beginPath();
+            c.moveTo(1, 2); c.quadraticCurveTo(1.5, -8, 1, -20); c.lineTo(4, -20); c.quadraticCurveTo(3, -8, 6, 2);
+            c.closePath();
+            paint(c, '#6f4520');
+            const j = () => (rand() - 0.5) * 3;
+            const blobs = [[-13 + j(), -29 + j(), 13], [13 + j(), -28 + j(), 13], [-5 + j(), -24, 11], [7 + j(), -35 + j(), 12.5], [0 + j(), -42 + j(), 15]];
+            c.fillStyle = '#17401a';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] + b[2] + 2.3, b[1]); c.arc(b[0], b[1], b[2] + 2.3, 0, Math.PI * 2); });
+            c.fill();
+            c.fillStyle = '#2f8229';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] + b[2], b[1]); c.arc(b[0], b[1], b[2], 0, Math.PI * 2); });
+            c.fill();
+            c.fillStyle = '#46a733';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] - 2 + b[2] * 0.84, b[1] - 2.6); c.arc(b[0] - 2, b[1] - 2.6, b[2] * 0.84, 0, Math.PI * 2); });
+            c.fill();
+            c.fillStyle = '#6fc542';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] - 4 + b[2] * 0.5, b[1] - 5.2); c.arc(b[0] - 4, b[1] - 5.2, b[2] * 0.5, 0, Math.PI * 2); });
+            c.fill();
+            c.fillStyle = '#9adf5c';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] - 5.5 + b[2] * 0.2, b[1] - 7.5); c.arc(b[0] - 5.5, b[1] - 7.5, b[2] * 0.2, 0, Math.PI * 2); });
+            c.fill();
+        }
+
+        function drawPineTree(c) {
+            c.fillStyle = 'rgba(18, 60, 20, 0.30)';
+            ell(c, 3, 3, 18, 6.5);
+            c.fill();
+            c.beginPath();
+            c.rect(-3.5, -9, 7, 12);
+            paint(c, '#84552a', '#3a2414', 2);
+            const tiers = [{ y: -7, w: 20, h: 23 }, { y: -22, w: 16, h: 21 }, { y: -36, w: 11.5, h: 19 }];
+            tiers.forEach((t) => {
+                c.beginPath();
+                c.moveTo(0, t.y - t.h);
+                c.lineTo(t.w, t.y);
+                c.lineTo(t.w * 0.48, t.y - 3.5);
+                c.lineTo(0, t.y + 2.5);
+                c.lineTo(-t.w * 0.48, t.y - 3.5);
+                c.lineTo(-t.w, t.y);
+                c.closePath();
+                paint(c, '#2c9150', '#10351f', 2.2);
+                c.beginPath();
+                c.moveTo(0.5, t.y - t.h + 2);
+                c.lineTo(t.w - 2.5, t.y - 1);
+                c.lineTo(t.w * 0.48, t.y - 4.5);
+                c.lineTo(0.5, t.y + 1);
+                c.closePath();
+                paint(c, '#1f7340');
+                c.beginPath();
+                c.moveTo(-1.5, t.y - t.h + 6);
+                c.lineTo(-t.w * 0.62, t.y - 3);
+                c.lineTo(-t.w * 0.22, t.y - 5.5);
+                c.closePath();
+                paint(c, '#55ba68');
+            });
+        }
+
+        function drawBoulder(c) {
+            c.fillStyle = 'rgba(18, 60, 20, 0.30)';
+            ell(c, 2, 3, 20, 6.5);
+            c.fill();
+            c.beginPath();
+            c.moveTo(-17, 3); c.lineTo(-14, -9); c.lineTo(-4, -16); c.lineTo(8, -13); c.lineTo(16, -3); c.lineTo(17, 3);
+            c.closePath();
+            paint(c, '#98a1ac', INK, 2.2);
+            c.beginPath();
+            c.moveTo(-14, -9); c.lineTo(-4, -16); c.lineTo(8, -13); c.lineTo(2, -6); c.lineTo(-8, -5);
+            c.closePath();
+            paint(c, '#c7ced6');
+            c.beginPath();
+            c.moveTo(8, -13); c.lineTo(16, -3); c.lineTo(17, 3); c.lineTo(5, 3); c.lineTo(2, -6);
+            c.closePath();
+            paint(c, '#737c88');
+            c.beginPath();
+            c.moveTo(-17, 3); c.lineTo(-14, -9); c.lineTo(-4, -16); c.lineTo(8, -13); c.lineTo(16, -3); c.lineTo(17, 3);
+            c.closePath();
+            paint(c, null, INK, 2.2);
+            c.beginPath();
+            c.moveTo(10, 4); c.lineTo(13, -3); c.lineTo(20, -4); c.lineTo(25, 4);
+            c.closePath();
+            paint(c, '#a9b1bb', INK, 2);
+        }
+
+        function drawBush(c) {
+            c.fillStyle = 'rgba(18, 60, 20, 0.28)';
+            ell(c, 2, 2, 15, 5);
+            c.fill();
+            const blobs = [[-8, -5, 7.5], [8, -5, 7.5], [0, -9, 9]];
+            c.fillStyle = '#17401a';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] + b[2] + 2, b[1]); c.arc(b[0], b[1], b[2] + 2, 0, Math.PI * 2); });
+            c.fill();
+            c.fillStyle = '#358c2c';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] + b[2], b[1]); c.arc(b[0], b[1], b[2], 0, Math.PI * 2); });
+            c.fill();
+            c.fillStyle = '#62bb3c';
+            c.beginPath();
+            blobs.forEach(b => { c.moveTo(b[0] - 2 + b[2] * 0.55, b[1] - 2.5); c.arc(b[0] - 2, b[1] - 2.5, b[2] * 0.55, 0, Math.PI * 2); });
+            c.fill();
+        }
+
+        function buildForestLayer(g) {
+            const cv = makeLayer(g.w, g.h);
+            const c = cv.getContext('2d');
+            const s = g.scale;
+            const rand = makeRng(1337);
+            const { w, h } = g;
+            const items = [];
+            const half = Math.min(w, h) * 0.5;
+
+            const maxTrees = Math.round(Math.min(120, 46 + (w * h) / (s * s) / 9000));
+            for (let tries = 0; tries < 2400 && items.length < maxTrees; tries++) {
+                const x = -20 * s + rand() * (w + 40 * s);
+                const y = -4 * s + rand() * (h + 50 * s);
+                const roll = rand();
+                const kindRoll = rand();
+                const size = 0.85 + rand() * 0.4;
+                const kind = kindRoll < 0.5 ? 'oak' : (kindRoll < 0.82 ? 'pine' : (kindRoll < 0.92 ? 'rock' : 'bush'));
+                const tall = (kind === 'oak' || kind === 'pine');
+                // Trunk, mid-canopy and crown must all stay clear of roads, moat and rings
+                if (!isOpenGround(g, x, y, 20)) continue;
+                if (tall && (!isOpenGround(g, x, y - 30 * s * size, 22) || !isOpenGround(g, x, y - 58 * s * size, 10))) continue;
+                // Favor the map borders so the meadow around the moat stays open
+                const edge = Math.max(0, Math.min(x, w - x, y, h - y)) / half;
+                if (roll < edge * 2.5 - 0.06) continue;
+                let ok = true;
+                for (let k = 0; k < items.length; k++) {
+                    if (Math.hypot(items[k].x - x, (items[k].y - y) * 1.5) < 38 * s) { ok = false; break; }
+                }
+                if (!ok) continue;
+                items.push({ x, y, kind, size });
+            }
+            items.sort((a, b) => a.y - b.y);
+
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+            for (let i = 0; i < items.length; i++) {
+                const it = items[i];
+                c.save();
+                c.translate(it.x, it.y);
+                const k = s * it.size * (it.kind === 'oak' || it.kind === 'pine' ? 1.12 : 0.95);
+                c.scale(k, k);
+                if (it.kind === 'oak') drawOakTree(c, rand);
+                else if (it.kind === 'pine') drawPineTree(c);
+                else if (it.kind === 'rock') drawBoulder(c);
+                else drawBush(c);
+                c.restore();
+            }
+            return cv;
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 12. FRAME RENDERER
+        // ------------------------------------------------------------------------------------
+        function renderBattlefield(targetCtx = ctx, w = canvas.width, h = canvas.height, previewMode = false) {
+            const geom = computeBattlefieldGeometry(w, h);
+            const art = getArt(geom);
+            const c = targetCtx;
+
+            c.save();
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+
+            // 1. Meadow, roads, moat, island & bridges (cached)
+            c.drawImage(art.ground, 0, 0);
+            if (!previewMode) drawWaterSparkles(c, geom, art);
+
+            // 2. Selected-lane firing corridor & glowing "TAP TO DEPLOY" rings
+            if (!previewMode) drawSelectedLaneFiringCorridor(c, geom, game.selectedLane);
+            drawDeploymentRings(c, geom, previewMode);
+
+            // 3. Units on the two rear roads, then the castle, then units on the front roads
+            const units = collectBattlefieldUnits(geom, previewMode);
+            drawUnitList(c, geom, units.filter(u => u.lane < 2));
+            c.drawImage(art.castle.cv, art.castle.ox, art.castle.oy);
+            drawCastleLiveDetails(c, geom, art, previewMode);
+            drawUnitList(c, geom, units.filter(u => u.lane >= 2));
+
+            // 4. Holographic deployment ghost & countdown
+            if (!previewMode && game.deployment) {
+                drawHolographicDeploymentGhost(c, geom, game.deployment);
+            }
+
+            // 5. Arrows & hit particles
+            if (!previewMode) {
+                drawArrowsAndParticles(c, geom);
+            }
+
+            // 6. Forest canopy (cached)
+            c.drawImage(art.trees, 0, 0);
+
+            // 7. Floating numbers & wave banner
+            if (!previewMode) {
+                drawFloatingTextsAndBanner(c, geom);
+            }
+
+            c.restore();
+        }
+
+        function drawWaterSparkles(c, g, art) {
+            const s = g.scale;
+            const t = game.animTime;
+            c.save();
+            c.lineWidth = 1.8 * s;
+            for (let i = 0; i < art.sparkles.length; i++) {
+                const sp = art.sparkles[i];
+                const a = Math.sin(t * sp.sp + sp.ph);
+                if (a <= 0) continue;
+                const len = (4 + a * 6) * s;
+                c.strokeStyle = `rgba(215, 242, 255, ${(a * 0.75).toFixed(3)})`;
+                c.beginPath();
+                c.moveTo(sp.x - len, sp.y);
+                c.quadraticCurveTo(sp.x, sp.y - 2.6 * s, sp.x + len, sp.y);
+                c.stroke();
+            }
+            c.restore();
+        }
+
+        function drawSelectedLaneFiringCorridor(c, g, laneIdx) {
+            const lane = g.lanes[laneIdx];
+            if (!lane) return;
+            const s = g.scale;
+            const side = (ROAD_HALF_W + 5) * s;
+            c.save();
+            c.setLineDash([9 * s, 8 * s]);
+            c.lineDashOffset = -game.animTime * 34 * s;
+            c.lineWidth = 2.4 * s;
+            c.strokeStyle = 'rgba(140, 232, 255, 0.8)';
+            c.shadowColor = 'rgba(56, 189, 248, 0.9)';
+            c.shadowBlur = 6 * s;
+            for (let pass = -1; pass <= 1; pass += 2) {
+                c.beginPath();
+                for (let k = 0; k <= 34; k++) {
+                    const d = 0.01 + (UNITS.archer.rangeDist - 0.01) * (k / 34);
+                    const p = laneDistToXY(g, laneIdx, d, pass * side);
+                    if (k === 0) c.moveTo(p.x, p.y); else c.lineTo(p.x, p.y);
+                }
+                c.stroke();
+            }
+            c.restore();
+        }
+
+        function drawDeploymentRings(c, g, previewMode) {
+            const s = g.scale;
+            const t = game.animTime;
+            for (let i = 0; i < 4; i++) {
+                const lane = g.lanes[i];
+                const sel = !previewMode && game.selectedLane === i;
+                const pulse = 0.5 + 0.5 * Math.sin(t * 3.2 + i * 1.3);
+                const rx = lane.ringRadius * (1 + 0.06 * pulse);
+                const ry = rx * 0.56;
+
+                c.save();
+                c.translate(lane.ringX, lane.ringY);
+                c.shadowColor = '#38bdf8';
+                c.shadowBlur = (sel ? 18 : 10) * s;
+                ell(c, 0, 0, rx, ry);
+                paint(c, sel ? 'rgba(56, 189, 248, 0.42)' : 'rgba(56, 189, 248, 0.24)', '#6ad8ff', (sel ? 3.6 : 2.8) * s);
+                c.shadowBlur = 0;
+                ell(c, 0, 0, rx * 0.62, ry * 0.62);
+                paint(c, 'rgba(186, 236, 255, 0.28)', 'rgba(214, 245, 255, 0.95)', 1.8 * s);
+                ell(c, 0, 0, rx * 0.2, ry * 0.2);
+                paint(c, 'rgba(235, 250, 255, 0.95)');
+                if (sel) {
+                    c.setLineDash([7 * s, 6 * s]);
+                    c.lineDashOffset = -t * 26 * s;
+                    ell(c, 0, 0, rx * 1.3, ry * 1.3);
+                    paint(c, null, '#fde047', 2.4 * s);
+                    c.setLineDash([]);
+                }
+
+                const ly = -ry - 9 * s;
+                c.font = `900 ${Math.max(8, Math.round(10.5 * s))}px "Trebuchet MS", "Arial Rounded MT Bold", sans-serif`;
+                c.textAlign = 'center';
+                c.lineWidth = 3.4 * s;
+                c.strokeStyle = INK;
+                c.fillStyle = sel ? '#fde047' : '#ffffff';
+                c.strokeText('TAP TO DEPLOY', 0, ly);
+                c.fillText('TAP TO DEPLOY', 0, ly);
+
+                if (sel) {
+                    const by = ly - 15 * s - Math.abs(Math.sin(t * 4)) * 5 * s;
+                    c.beginPath();
+                    c.moveTo(-7 * s, by - 7 * s);
+                    c.lineTo(7 * s, by - 7 * s);
+                    c.lineTo(0, by + 3 * s);
+                    c.closePath();
+                    paint(c, '#fde047', INK, 2 * s);
+                }
+                c.restore();
+            }
+        }
+
+        function drawFlag(c, g, flag, idx) {
+            const s = g.scale;
+            const t = game.animTime;
+            const { x, y } = flag.p;
+            const top = y - flag.h * s;
+            c.strokeStyle = INK;
+            c.lineWidth = 3.4 * s;
+            c.beginPath(); c.moveTo(x, y); c.lineTo(x, top); c.stroke();
+            c.strokeStyle = '#d9dee5';
+            c.lineWidth = 1.6 * s;
+            c.beginPath(); c.moveTo(x, y); c.lineTo(x, top); c.stroke();
+            ell(c, x, top, 2 * s, 2 * s);
+            paint(c, '#f2c94c', INK, 1.3 * s);
+
+            const fw = (flag.big ? 20 : 15) * s;
+            const fh = (flag.big ? 11 : 8.5) * s;
+            const wv = (k) => Math.sin(t * 5 + idx * 1.7 + k * 1.9) * 1.7 * s * k;
+            c.beginPath();
+            c.moveTo(x, top + 1.5 * s);
+            c.quadraticCurveTo(x + fw * 0.5, top + 1.5 * s + wv(0.6) - 2 * s, x + fw, top + 1.5 * s + wv(1));
+            c.lineTo(x + fw * 0.72, top + 1.5 * s + fh * 0.5 + wv(0.8));
+            c.lineTo(x + fw, top + 1.5 * s + fh + wv(1));
+            c.quadraticCurveTo(x + fw * 0.5, top + 1.5 * s + fh + wv(0.6) - 2 * s, x, top + 1.5 * s + fh);
+            c.closePath();
+            paint(c, '#2f6fe0', INK, 1.8 * s);
+            c.beginPath();
+            c.moveTo(x + 1.5 * s, top + 1.5 * s + fh * 0.5);
+            c.lineTo(x + fw * 0.6, top + 1.5 * s + fh * 0.5 + wv(0.6));
+            c.strokeStyle = '#9cc4ff';
+            c.lineWidth = 1.6 * s;
+            c.stroke();
+        }
+
+        // Flags, selected-tower highlight and the archers standing on the gate towers
+        function drawCastleLiveDetails(c, g, art, previewMode) {
+            const s = g.scale;
+            const t = game.animTime;
+            c.save();
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+            for (let i = 0; i < art.castle.flags.length; i++) drawFlag(c, g, art.castle.flags[i], i);
+
+            const slots = [{ dx: -8, dy: -8 }, { dx: 8, dy: -8 }, { dx: 0, dy: 4 }];
+            for (let li = 0; li < 4; li++) {
+                const lane = g.lanes[li];
+                const list = previewMode ? (li < 2 ? [{}, {}] : [{}]) : game.archers[li];
+
+                if (!previewMode && game.selectedLane === li) {
+                    const cxw = lane.ax * 80;
+                    const cyw = lane.ay * 80;
+                    const pulse = 0.55 + 0.45 * Math.sin(t * 4);
+                    pathPts(c, [
+                        g.P(cxw - 15.5, cyw - 15.5, TOWER_TOP_Z), g.P(cxw + 15.5, cyw - 15.5, TOWER_TOP_Z),
+                        g.P(cxw + 15.5, cyw + 15.5, TOWER_TOP_Z), g.P(cxw - 15.5, cyw + 15.5, TOWER_TOP_Z)
+                    ]);
+                    c.save();
+                    c.shadowColor = '#38bdf8';
+                    c.shadowBlur = 12 * s;
+                    paint(c, `rgba(56, 189, 248, ${(0.12 + 0.12 * pulse).toFixed(3)})`, `rgba(150, 235, 255, ${(0.6 + 0.4 * pulse).toFixed(3)})`, 2.6 * s);
+                    c.restore();
+                }
+
+                const dir = (li === 1 || li === 3) ? 1 : -1;
+                for (let k = 0; k < list.length && k < 3; k++) {
+                    drawTowerArcher(c, lane.towerX + slots[k].dx * s, lane.towerY + slots[k].dy * s + 3 * s, s, list[k], dir);
+                }
+            }
+            c.restore();
+        }
+
+        function rr(c, x, y, w, h, r) { drawRoundRectPath(c, x, y, w, h, r); }
+
+        function drawTowerArcher(c, x, y, scale, archer, dir) {
+            const shoot = archer.shootAnim || 0;
+            c.save();
+            c.translate(x, y);
+            c.scale(scale * dir, scale);
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+            c.strokeStyle = INK;
+            c.lineWidth = 1.6;
+
+            c.fillStyle = 'rgba(0, 0, 0, 0.28)';
+            ell(c, 0, 0, 6.5, 2.6);
+            c.fill();
+            // Legs
+            rr(c, -4, -6, 3.4, 6, 1.4); paint(c, '#3b2d24', INK, 1.4);
+            rr(c, 0.6, -6, 3.4, 6, 1.4); paint(c, '#3b2d24', INK, 1.4);
+            // Tunic
+            rr(c, -5, -14.5, 10, 10, 3.2); paint(c, '#2f6fe0', INK, 1.6);
+            c.fillStyle = '#8a5a2b';
+            c.fillRect(-4.6, -8.2, 9.2, 1.8);
+            // Quiver on the back
+            c.save();
+            c.translate(-5, -12);
+            c.rotate(-0.35);
+            rr(c, -2, -6, 3.6, 9, 1.2); paint(c, '#8a5a2b', INK, 1.3);
+            c.restore();
+            // Hooded head
+            ell(c, 0, -18.5, 5.6, 5.6); paint(c, '#2458c4', INK, 1.6);
+            ell(c, 1.8, -18, 3.3, 3.5); paint(c, '#f3cda3', INK, 1.1);
+            ell(c, 3, -18.6, 0.8, 0.9); paint(c, INK);
+            // Bow, string & nocked arrow
+            const pull = 7 - 4.5 * (1 - shoot);
+            c.strokeStyle = INK; c.lineWidth = 3.4;
+            c.beginPath(); c.moveTo(7, -23.5); c.quadraticCurveTo(13.5, -15.5, 7, -7.5); c.stroke();
+            c.strokeStyle = '#a66a2c'; c.lineWidth = 1.7;
+            c.beginPath(); c.moveTo(7, -23.5); c.quadraticCurveTo(13.5, -15.5, 7, -7.5); c.stroke();
+            c.strokeStyle = '#f1f5f9'; c.lineWidth = 0.9;
+            c.beginPath(); c.moveTo(7, -23.5); c.lineTo(pull, -15.5); c.lineTo(7, -7.5); c.stroke();
+            if (shoot < 0.35) {
+                c.strokeStyle = INK; c.lineWidth = 1.5;
+                c.beginPath(); c.moveTo(pull, -15.5); c.lineTo(14.5, -15.5); c.stroke();
+            }
+            // Arm
+            c.strokeStyle = INK; c.lineWidth = 3.6;
+            c.beginPath(); c.moveTo(2, -12); c.lineTo(pull, -15.5); c.stroke();
+            c.strokeStyle = '#3b82f6'; c.lineWidth = 2;
+            c.beginPath(); c.moveTo(2, -12); c.lineTo(pull, -15.5); c.stroke();
+            c.restore();
+
+            // Quiver gauge
+            if (archer.ammo !== undefined) {
+                const pct = Math.max(0, Math.min(1, archer.ammo / UNITS.archer.maxAmmo));
+                const bw = 11 * scale;
+                c.fillStyle = INK;
+                c.fillRect(x - bw / 2 - scale, y - 29 * scale, bw + 2 * scale, 3.6 * scale);
+                c.fillStyle = pct > 0.3 ? '#fde047' : '#fb923c';
+                c.fillRect(x - bw / 2, y - 28.2 * scale, bw * pct, 2 * scale);
+            }
+        }
+
+        function collectBattlefieldUnits(geom, previewMode) {
+            const list = [];
+            if (previewMode) {
+                const demo = [
+                    { kind: 'swordsman', lane: 0, dist: 0.28, lateral: -6, hp: 135, maxHp: 135 },
+                    { kind: 'swordsman', lane: 0, dist: 0.34, lateral: 6, hp: 135, maxHp: 135 },
+                    { kind: 'swordsman', lane: 1, dist: 0.30, lateral: 0, hp: 135, maxHp: 135 },
+                    { kind: 'swordsman', lane: 2, dist: 0.30, lateral: -5, hp: 135, maxHp: 135 },
+                    { kind: 'swordsman', lane: 3, dist: 0.30, lateral: 5, hp: 135, maxHp: 135 },
+                    { kind: 'enemy', type: 'ogre', lane: 0, dist: 0.52, lateral: 0, hp: 200, maxHp: 225, hasShield: false },
+                    { kind: 'enemy', type: 'goblin', lane: 0, dist: 0.64, lateral: -8, hp: 46, maxHp: 46, hasShield: false },
+                    { kind: 'enemy', type: 'orc', lane: 1, dist: 0.50, lateral: 4, hp: 80, maxHp: 96, hasShield: true },
+                    { kind: 'enemy', type: 'goblin', lane: 2, dist: 0.56, lateral: -4, hp: 35, maxHp: 46, hasShield: false },
+                    { kind: 'enemy', type: 'ogre', lane: 3, dist: 0.62, lateral: 0, hp: 225, maxHp: 225, hasShield: false }
+                ];
+                demo.forEach((d) => {
+                    const pt = laneDistToXY(geom, d.lane, d.dist, d.lateral * geom.scale);
+                    list.push({ kind: d.kind, unit: d, lane: d.lane, x: pt.x, y: pt.y });
+                });
+            } else {
+                for (let i = 0; i < game.swordsmen.length; i++) {
+                    const sw = game.swordsmen[i];
+                    const pt = laneDistToXY(geom, sw.lane, sw.dist, sw.lateral);
+                    list.push({ kind: 'swordsman', unit: sw, lane: sw.lane, x: pt.x, y: pt.y });
+                }
+                for (let i = 0; i < game.enemies.length; i++) {
+                    const en = game.enemies[i];
+                    const pt = laneDistToXY(geom, en.lane, en.dist, en.lateral);
+                    list.push({ kind: 'enemy', unit: en, lane: en.lane, x: pt.x, y: pt.y });
+                }
+            }
+            list.sort((a, b) => a.y - b.y);
+            return list;
+        }
+
+        function drawUnitList(c, geom, list) {
+            for (let i = 0; i < list.length; i++) {
+                const item = list[i];
+                const east = (item.lane === 1 || item.lane === 3);
+                if (item.kind === 'swordsman') {
+                    drawSwordsmanSprite(c, item.x, item.y, geom.scale, item.unit, east ? 1 : -1);
+                } else {
+                    drawEnemySprite(c, item.x, item.y, geom.scale, item.unit, east ? -1 : 1);
+                }
+            }
+        }
+
+        function drawHealthBar(c, x, y, w, pct, color, scale) {
+            const h = 4.4 * scale;
+            c.fillStyle = INK;
+            drawRoundRectPath(c, x - w / 2 - 1.4 * scale, y - 1.4 * scale, w + 2.8 * scale, h + 2.8 * scale, 2.4 * scale);
+            c.fill();
+            c.fillStyle = '#4b1d1d';
+            c.fillRect(x - w / 2, y, w, h);
+            c.fillStyle = color;
+            c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, pct)), h);
+            c.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            c.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, pct)), h * 0.4);
+        }
+
+        function drawSwordsmanSprite(c, x, y, scale, sw, dir = 1) {
+            const t = game.animTime;
+            const ph = (sw.lane || 0) * 1.7 + (sw.guardDist || 0) * 60;
+            const moving = sw.guardDist !== undefined && sw.dist < sw.guardDist - 0.004;
+            const step = moving ? Math.sin(t * 13 + ph) : 0;
+            const bob = moving ? -Math.abs(step) * 1.3 : Math.sin(t * 2.6 + ph) * 0.45;
+            const k = scale * 1.12;
+
+            c.save();
+            c.translate(x, y);
+            c.scale(k * dir, k);
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+
+            c.fillStyle = 'rgba(0, 0, 0, 0.30)';
+            ell(c, 0, 1, 10.5, 4.2);
+            c.fill();
+
+            // Legs
+            rr(c, -5.6, -8 - Math.max(0, step) * 1.8, 4.8, 8, 1.8); paint(c, '#27408f', INK, 1.7);
+            rr(c, 0.8, -8 - Math.max(0, -step) * 1.8, 4.8, 8, 1.8); paint(c, '#27408f', INK, 1.7);
+
+            c.translate(0, bob);
+
+            // Sword arm (behind the body)
+            c.save();
+            c.translate(-5.5, -15);
+            c.rotate(-0.3 + (sw.attackAnim || 0) * 1.9);
+            c.beginPath();
+            c.moveTo(-1.6, -3); c.lineTo(-1.6, -15.5); c.lineTo(0, -19); c.lineTo(1.6, -15.5); c.lineTo(1.6, -3);
+            c.closePath();
+            paint(c, '#eef2f6', INK, 1.5);
+            rr(c, -4.2, -4.2, 8.4, 2.6, 1); paint(c, '#f2c94c', INK, 1.3);
+            rr(c, -1.3, -2, 2.6, 4.6, 1); paint(c, '#7b4a22', INK, 1.2);
+            c.restore();
+
+            // Tunic & belt
+            rr(c, -6.8, -19.5, 13.6, 13, 4.2); paint(c, '#2f6fe0', INK, 1.8);
+            c.fillStyle = 'rgba(255, 255, 255, 0.22)';
+            rr(c, -5.2, -18.2, 3.4, 9, 1.6); c.fill();
+            c.fillStyle = '#f2c94c';
+            c.fillRect(-6, -10.2, 12, 2.2);
+
+            // Helmet
+            ell(c, 0, -25, 7, 6.8); paint(c, '#cfd6de', INK, 1.8);
+            c.fillStyle = 'rgba(255, 255, 255, 0.55)';
+            ell(c, -2.6, -27.6, 2.4, 1.8); c.fill();
+            c.fillStyle = INK;
+            rr(c, 0.4, -26.6, 6.2, 2.5, 1); c.fill();
+            c.fillRect(2.6, -26, 1.2, 5);
+            ell(c, -0.5, -32.3, 2.3, 3); paint(c, '#3b82f6', INK, 1.4);
+
+            // Kite shield
+            c.beginPath();
+            c.moveTo(1.6, -19.5);
+            c.lineTo(11.4, -19.5);
+            c.lineTo(11.4, -11.5);
+            c.quadraticCurveTo(11.2, -5.2, 6.5, -2.6);
+            c.quadraticCurveTo(1.8, -5.2, 1.6, -11.5);
+            c.closePath();
+            paint(c, '#f2c94c', INK, 1.8);
+            c.beginPath();
+            c.moveTo(3.3, -17.8);
+            c.lineTo(9.7, -17.8);
+            c.lineTo(9.7, -11.6);
+            c.quadraticCurveTo(9.5, -7, 6.5, -4.9);
+            c.quadraticCurveTo(3.5, -7, 3.3, -11.6);
+            c.closePath();
+            paint(c, '#2456c9');
+            c.strokeStyle = '#f4f7fb';
+            c.lineWidth = 1.5;
+            c.beginPath();
+            c.moveTo(6.5, -16.4); c.lineTo(6.5, -7.4);
+            c.moveTo(4.2, -13.2); c.lineTo(8.8, -13.2);
+            c.stroke();
+            c.restore();
+
+            if (sw.hp < sw.maxHp) {
+                drawHealthBar(c, x, y - 43 * scale, 24 * scale, sw.hp / sw.maxHp, '#38bdf8', scale);
+            }
+        }
+
+        function drawEnemySprite(c, x, y, scale, en, dir = 1) {
+            const t = game.animTime;
+            const flash = en.hitFlash && en.hitFlash > 0;
+            const F = (col) => (flash ? '#ffffff' : col);
+            const ph = (en.lane || 0) * 2.1 + (en.lateral || 0) * 0.7 + (en.maxHp || 0) * 0.13;
+            const isOgre = en.type === 'ogre';
+            const isOrc = en.type === 'orc';
+            const pace = isOgre ? 7 : (isOrc ? 10 : 14);
+            const step = Math.sin(t * pace + ph);
+            const bob = -Math.abs(step) * (isOgre ? 1.6 : 1.1);
+            const swing = Math.sin(t * (isOgre ? 3.2 : 5) + ph);
+            const k = scale * (isOgre ? 1.22 : (isOrc ? 1.12 : 1.05));
+
+            c.save();
+            c.translate(x, y);
+            c.scale(k * dir, k);
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+
+            if (isOgre) {
+                c.fillStyle = 'rgba(0, 0, 0, 0.32)';
+                ell(c, 0, 1, 16, 6); c.fill();
+                rr(c, -9, -9 - Math.max(0, step) * 2, 7.5, 9, 2.6); paint(c, F('#9a4a34'), INK, 1.9);
+                rr(c, 1.5, -9 - Math.max(0, -step) * 2, 7.5, 9, 2.6); paint(c, F('#9a4a34'), INK, 1.9);
+                c.translate(0, bob);
+                // Club arm (behind)
+                c.save();
+                c.translate(-9, -22);
+                c.rotate(-0.55 + swing * 0.35);
+                c.beginPath();
+                c.moveTo(-2, 2); c.lineTo(-4.6, -19); c.quadraticCurveTo(0, -24, 4.6, -19); c.lineTo(2, 2);
+                c.closePath();
+                paint(c, F('#8a5527'), INK, 1.9);
+                c.fillStyle = '#d9dee5';
+                [[-2, -16], [2.2, -12.5], [-0.6, -8.5]].forEach(p => { ell(c, p[0], p[1], 1.2, 1.2); c.fill(); });
+                c.restore();
+                // Body
+                ell(c, 0, -19, 12.5, 13); paint(c, F('#bf5f45'), INK, 2);
+                ell(c, 2.5, -16.5, 7.2, 8); paint(c, F('#dc8d6f'));
+                c.beginPath();
+                c.moveTo(-11.5, -11); c.quadraticCurveTo(0, -4.5, 11.5, -11); c.lineTo(9, -6); c.quadraticCurveTo(0, -1.5, -9, -6);
+                c.closePath();
+                paint(c, F('#70502e'), INK, 1.7);
+                // Front arm
+                c.strokeStyle = INK; c.lineWidth = 7.4;
+                c.beginPath(); c.moveTo(8, -24); c.lineTo(12.5, -14); c.stroke();
+                c.strokeStyle = F('#bf5f45'); c.lineWidth = 4.6;
+                c.beginPath(); c.moveTo(8, -24); c.lineTo(12.5, -14); c.stroke();
+                // Head
+                ell(c, 2.5, -35, 8, 7.4); paint(c, F('#c9684d'), INK, 2);
+                c.beginPath(); c.moveTo(-3, -40.5); c.lineTo(-5.5, -46); c.lineTo(-0.5, -42); c.closePath(); paint(c, '#f1ead9', INK, 1.3);
+                c.beginPath(); c.moveTo(6, -41.5); c.lineTo(9.5, -46.5); c.lineTo(9.2, -40); c.closePath(); paint(c, '#f1ead9', INK, 1.3);
+                c.strokeStyle = INK; c.lineWidth = 1.8;
+                c.beginPath(); c.moveTo(2.6, -38.6); c.lineTo(8.6, -36.8); c.stroke();
+                ell(c, 6.2, -35.6, 1.6, 1.6); paint(c, '#fde047', INK, 1);
+                c.beginPath(); c.moveTo(3.4, -31); c.lineTo(9.4, -31.4); c.stroke();
+                c.beginPath(); c.moveTo(5.2, -31.2); c.lineTo(6.1, -34); c.lineTo(7, -31.3); c.closePath(); paint(c, '#ffffff', INK, 0.9);
+            } else if (isOrc) {
+                c.fillStyle = 'rgba(0, 0, 0, 0.32)';
+                ell(c, 0, 1, 11.5, 4.6); c.fill();
+                rr(c, -6, -8 - Math.max(0, step) * 1.8, 5, 8, 2); paint(c, F('#3f4c2c'), INK, 1.7);
+                rr(c, 1, -8 - Math.max(0, -step) * 1.8, 5, 8, 2); paint(c, F('#3f4c2c'), INK, 1.7);
+                c.translate(0, bob);
+                // Axe (behind)
+                c.save();
+                c.translate(-6, -13);
+                c.rotate(-0.4 + swing * 0.25);
+                c.strokeStyle = INK; c.lineWidth = 3.6;
+                c.beginPath(); c.moveTo(0, 3); c.lineTo(0, -17); c.stroke();
+                c.strokeStyle = '#8a5527'; c.lineWidth = 1.8;
+                c.beginPath(); c.moveTo(0, 3); c.lineTo(0, -17); c.stroke();
+                c.beginPath();
+                c.moveTo(0, -18); c.quadraticCurveTo(-9, -19, -8.5, -10.5); c.quadraticCurveTo(-4, -12.5, 0, -11.5);
+                c.closePath();
+                paint(c, '#c3cad3', INK, 1.5);
+                c.restore();
+                // Armored torso
+                rr(c, -7.4, -20, 14.8, 13.5, 4.4); paint(c, F('#6b7482'), INK, 1.8);
+                c.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                rr(c, -5.6, -18.6, 3.6, 9, 1.6); c.fill();
+                c.fillStyle = '#5a3a1e';
+                c.fillRect(-6.6, -10, 13.2, 2.2);
+                // Head, tusks, iron cap
+                ell(c, 1, -25.5, 7.4, 6.9); paint(c, F('#5d9e37'), INK, 1.8);
+                c.beginPath();
+                c.arc(1, -26.6, 7.6, Math.PI * 1.02, Math.PI * 1.98);
+                c.closePath();
+                paint(c, F('#8f98a5'), INK, 1.7);
+                c.beginPath(); c.moveTo(-1.2, -34); c.lineTo(1, -38.6); c.lineTo(3.2, -34); c.closePath(); paint(c, '#c3cad3', INK, 1.3);
+                ell(c, 4.6, -25.2, 1.4, 1.4); paint(c, '#ef4444', INK, 0.9);
+                c.beginPath(); c.moveTo(2.2, -21.2); c.lineTo(3, -24); c.lineTo(4, -21.2); c.closePath(); paint(c, '#ffffff', INK, 0.9);
+                c.beginPath(); c.moveTo(5.6, -21.4); c.lineTo(6.4, -24); c.lineTo(7.4, -21.6); c.closePath(); paint(c, '#ffffff', INK, 0.9);
+                if (en.hasShield) {
+                    // Heavy round iron-banded shield
+                    ell(c, 6.5, -12.5, 8.8, 9.4); paint(c, F('#b9c0c9'), INK, 1.9);
+                    ell(c, 6.5, -12.5, 6.4, 7); paint(c, F('#9a6a35'), INK, 1.2);
+                    c.strokeStyle = '#6f4520'; c.lineWidth = 1;
+                    c.beginPath();
+                    c.moveTo(3.4, -18.4); c.lineTo(3.4, -6.6);
+                    c.moveTo(9.6, -18.4); c.lineTo(9.6, -6.6);
+                    c.stroke();
+                    ell(c, 6.5, -12.5, 2.4, 2.6); paint(c, '#d9dee5', INK, 1.2);
+                } else {
+                    c.strokeStyle = INK; c.lineWidth = 5.6;
+                    c.beginPath(); c.moveTo(5.5, -17); c.lineTo(9.5, -10.5); c.stroke();
+                    c.strokeStyle = F('#5d9e37'); c.lineWidth = 3.2;
+                    c.beginPath(); c.moveTo(5.5, -17); c.lineTo(9.5, -10.5); c.stroke();
+                }
+            } else {
+                c.fillStyle = 'rgba(0, 0, 0, 0.30)';
+                ell(c, 0, 1, 8.5, 3.6); c.fill();
+                rr(c, -4.4, -6 - Math.max(0, step) * 1.6, 3.8, 6, 1.5); paint(c, F('#4d7f2a'), INK, 1.5);
+                rr(c, 0.8, -6 - Math.max(0, -step) * 1.6, 3.8, 6, 1.5); paint(c, F('#4d7f2a'), INK, 1.5);
+                c.translate(0, bob);
+                rr(c, -5.2, -14.5, 10.4, 10, 3.4); paint(c, F('#9a6a35'), INK, 1.7);
+                c.fillStyle = '#6f4520';
+                c.fillRect(-4.6, -7.6, 9.2, 1.8);
+                // Ears + head
+                c.beginPath(); c.moveTo(-3.5, -22); c.lineTo(-12, -26.5); c.lineTo(-5, -17.5); c.closePath(); paint(c, F('#7cc242'), INK, 1.5);
+                c.beginPath(); c.moveTo(5, -22.5); c.lineTo(12.5, -27.5); c.lineTo(7, -18); c.closePath(); paint(c, F('#7cc242'), INK, 1.5);
+                ell(c, 1, -20, 6.8, 6.3); paint(c, F('#86cb47'), INK, 1.7);
+                ell(c, 3.8, -20.8, 1.7, 1.9); paint(c, '#fde047', INK, 0.9);
+                ell(c, 4.3, -20.8, 0.7, 0.9); paint(c, INK);
+                c.strokeStyle = INK; c.lineWidth = 1.1;
+                c.beginPath(); c.moveTo(2.4, -16.8); c.quadraticCurveTo(4.6, -15.6, 6.6, -17.2); c.stroke();
+                // Dagger arm
+                c.save();
+                c.translate(4.5, -10.5);
+                c.rotate(-0.5 + swing * 0.4);
+                c.strokeStyle = INK; c.lineWidth = 4.2;
+                c.beginPath(); c.moveTo(0, 0); c.lineTo(5, -1); c.stroke();
+                c.strokeStyle = F('#86cb47'); c.lineWidth = 2.2;
+                c.beginPath(); c.moveTo(0, 0); c.lineTo(5, -1); c.stroke();
+                c.beginPath(); c.moveTo(4.4, -2.4); c.lineTo(12, -6.5); c.lineTo(6.2, 0.6); c.closePath();
+                paint(c, '#dfe4ea', INK, 1.2);
+                c.restore();
+            }
+            c.restore();
+
+            const top = (isOgre ? 60 : (isOrc ? 47 : 36)) * scale;
+            drawHealthBar(c, x, y - top, (isOgre ? 34 : 24) * scale, en.hp / en.maxHp, '#ef4444', scale);
+        }
+
+        function drawHolographicDeploymentGhost(c, geom, dep) {
+            const lane = geom.lanes[dep.lane];
+            const s = geom.scale;
+            const isArcher = dep.type === 'archer';
+            const gx = isArcher ? lane.towerX : lane.ringX;
+            const gy = isArcher ? lane.towerY + 2 * s : lane.ringY;
+            const progress = Math.max(0, Math.min(1, (dep.total - dep.remaining) / dep.total));
+            const t = game.animTime;
+            const dir = (dep.lane === 1 || dep.lane === 3) ? 1 : -1;
+
+            c.save();
+            c.translate(gx, gy);
+            c.lineJoin = 'round';
+            c.lineCap = 'round';
+
+            // Progress ring on the ground
+            const rx = (isArcher ? 20 : 27) * s;
+            const ry = rx * 0.56;
+            ell(c, 0, 0, rx, ry);
+            paint(c, 'rgba(14, 165, 233, 0.30)', 'rgba(12, 74, 110, 0.85)', 5.5 * s);
+            c.strokeStyle = '#7ddcff';
+            c.lineWidth = 3.4 * s;
+            c.beginPath();
+            c.ellipse(0, 0, rx, ry, 0, -Math.PI * 0.5, -Math.PI * 0.5 + progress * Math.PI * 2);
+            c.stroke();
+
+            // Hologram beam
+            const beam = c.createLinearGradient(0, 0, 0, -62 * s);
+            beam.addColorStop(0, 'rgba(125, 220, 255, 0.50)');
+            beam.addColorStop(1, 'rgba(125, 220, 255, 0)');
+            c.fillStyle = beam;
+            c.beginPath();
+            c.moveTo(-rx * 0.8, 0); c.lineTo(rx * 0.8, 0); c.lineTo(rx * 0.5, -62 * s); c.lineTo(-rx * 0.5, -62 * s);
+            c.closePath();
+            c.fill();
+
+            // Translucent silhouette of the incoming unit
+            c.save();
+            c.scale(s * 1.15 * dir, s * 1.15);
+            c.translate(0, Math.sin(t * 5) * 0.8 - 1);
+            c.globalAlpha = 0.72 + 0.14 * Math.sin(t * 9);
+            c.shadowColor = '#7dd3fc';
+            c.shadowBlur = 12 * s;
+            const body = 'rgba(214, 244, 255, 0.92)';
+            const edge = '#38bdf8';
+            rr(c, -5.2, -8, 4.4, 8, 1.6); paint(c, body, edge, 1.5);
+            rr(c, 0.8, -8, 4.4, 8, 1.6); paint(c, body, edge, 1.5);
+            rr(c, -6.6, -19.5, 13.2, 13, 4); paint(c, body, edge, 1.6);
+            ell(c, 0, -25, 6.8, 6.6); paint(c, body, edge, 1.6);
+            if (isArcher) {
+                c.strokeStyle = edge; c.lineWidth = 2;
+                c.beginPath(); c.moveTo(8, -27); c.quadraticCurveTo(15.5, -17, 8, -7); c.stroke();
+                c.lineWidth = 1;
+                c.beginPath(); c.moveTo(8, -27); c.lineTo(8, -7); c.stroke();
+            } else {
+                c.beginPath();
+                c.moveTo(2, -19.5); c.lineTo(11.5, -19.5); c.lineTo(11.5, -11.5);
+                c.quadraticCurveTo(11.2, -5.2, 6.7, -2.6); c.quadraticCurveTo(2.2, -5.2, 2, -11.5);
+                c.closePath();
+                paint(c, body, edge, 1.6);
+                c.beginPath();
+                c.moveTo(-8.6, -15); c.lineTo(-11.8, -33); c.lineTo(-9, -35.5); c.lineTo(-6.6, -32.6); c.lineTo(-5.6, -15);
+                c.closePath();
+                paint(c, body, edge, 1.4);
+            }
+            c.restore();
+
+            // Countdown
+            c.font = `900 ${Math.round(19 * s)}px "Trebuchet MS", "Arial Rounded MT Bold", sans-serif`;
+            c.textAlign = 'center';
+            c.lineWidth = 5 * s;
+            c.strokeStyle = '#0b3a5c';
+            c.fillStyle = '#b6f0ff';
+            const label = `${dep.remaining.toFixed(1)}s`;
+            c.strokeText(label, 0, -52 * s);
+            c.fillText(label, 0, -52 * s);
+            c.restore();
+        }
+
+        function drawArrowsAndParticles(c, geom) {
+            const s = geom.scale;
+            c.save();
+            c.lineCap = 'round';
+            for (let i = 0; i < game.arrows.length; i++) {
+                const arr = game.arrows[i];
+                const t = Math.max(0, Math.min(1, arr.progress));
+                const at = (u) => ({
+                    x: arr.startX + (arr.targetX - arr.startX) * u,
+                    y: arr.startY + (arr.targetY - arr.startY) * u - Math.sin(u * Math.PI) * arr.arcHeight
+                });
+                const cur = at(t);
+                const prev = at(Math.max(0, t - 0.04));
+                const trail = at(Math.max(0, t - 0.16));
+                const ang = Math.atan2(cur.y - prev.y, cur.x - prev.x);
+
+                c.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                c.lineWidth = 1.6 * s;
+                c.beginPath();
+                c.moveTo(trail.x, trail.y);
+                c.lineTo(cur.x, cur.y);
+                c.stroke();
+
+                c.save();
+                c.translate(cur.x, cur.y);
+                c.rotate(ang);
+                c.scale(s, s);
+                c.strokeStyle = INK; c.lineWidth = 3.2;
+                c.beginPath(); c.moveTo(-13, 0); c.lineTo(0, 0); c.stroke();
+                c.strokeStyle = '#c9925a'; c.lineWidth = 1.5;
+                c.beginPath(); c.moveTo(-13, 0); c.lineTo(0, 0); c.stroke();
+                c.beginPath(); c.moveTo(3.5, 0); c.lineTo(-2.5, -3); c.lineTo(-2.5, 3); c.closePath();
+                paint(c, '#e8edf2', INK, 1.1);
+                c.beginPath(); c.moveTo(-13.5, 0); c.lineTo(-16, -2.6); c.lineTo(-11, -0.2); c.lineTo(-16, 2.6); c.closePath();
+                paint(c, '#ffffff', INK, 0.8);
+                c.restore();
+            }
+
+            for (let i = 0; i < game.particles.length; i++) {
+                const p = game.particles[i];
+                ell(c, p.x, p.y, p.size * s, p.size * s);
+                paint(c, p.color, 'rgba(38, 35, 53, 0.55)', 0.9 * s);
+            }
+            c.restore();
+        }
+
+        function drawFloatingTextsAndBanner(c, geom) {
+            const s = geom.scale;
+            const fontStack = '"Trebuchet MS", "Arial Rounded MT Bold", sans-serif';
+            c.save();
+            c.lineJoin = 'round';
+            for (let i = 0; i < game.floatingTexts.length; i++) {
+                const ft = game.floatingTexts[i];
+                const alpha = Math.max(0, Math.min(1, ft.life / ft.maxLife));
+                c.globalAlpha = alpha;
+                c.font = `900 ${Math.round(ft.size * s)}px ${fontStack}`;
+                c.textAlign = 'center';
+                c.lineWidth = 4.2 * s;
+                c.strokeStyle = INK;
+                c.fillStyle = ft.color;
+                c.strokeText(ft.text, ft.x, ft.y);
+                c.fillText(ft.text, ft.x, ft.y);
+            }
+            c.globalAlpha = 1;
+
+            if (game.waveBannerTimer > 0) {
+                const msg = game.wave === 1 && game.enemies.length === 0
+                    ? 'PICK A ROAD & DEPLOY YOUR DEFENDERS!'
+                    : `WAVE ${game.wave} INCOMING!`;
+                let size = 26 * s;
+                c.font = `900 ${Math.round(size)}px ${fontStack}`;
+                const maxW = geom.w * 0.9;
+                const tw = c.measureText(msg).width;
+                if (tw > maxW) {
+                    size *= maxW / tw;
+                    c.font = `900 ${Math.round(size)}px ${fontStack}`;
+                }
+                const by = Math.max(geom.h * 0.17, geom.cy - 172 * s);
+                c.globalAlpha = Math.min(1, game.waveBannerTimer * 2.5);
+                c.textAlign = 'center';
+                c.lineWidth = size * 0.28;
+                c.strokeStyle = INK;
+                c.fillStyle = '#fde047';
+                c.strokeText(msg, geom.cx, by);
+                c.fillText(msg, geom.cx, by);
+            }
+            c.restore();
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 13. CANVAS CLICK / TOUCH & KEYBOARD CONTROLS
+        // ------------------------------------------------------------------------------------
+        function handleCanvasPointerDown(clientX, clientY) {
+            if (game.paused || game.gameOver || game.victory) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+
+            // 1. Check direct hit on any of the 4 glowing cyan "TAP TO DEPLOY" rings or Corner Towers
+            for (let i = 0; i < 4; i++) {
+                const lane = geom.lanes[i];
+                const dRing = Math.hypot(x - lane.ringX, y - lane.ringY);
+                const dTower = Math.hypot(x - lane.towerX, y - lane.towerY);
+                if (dRing <= lane.ringRadius * 1.45 || dTower <= 34 * geom.scale) {
+                    selectLane(i);
+                    return;
+                }
+            }
+
+            // 2. Otherwise select the quadrant lane closest to the click if outside central keep
+            const dx = x - geom.cx;
+            const dy = y - geom.cy;
+            if (Math.hypot(dx, dy) > 40 * geom.scale) {
+                const quadrantLane = (dy < 0 ? 0 : 2) + (dx < 0 ? 0 : 1);
+                selectLane(quadrantLane);
+            }
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'touch' && ! e.isPrimary) return;
+            handleCanvasPointerDown(e.clientX, e.clientY);
+        });
+
+        // Two-finger mobile tap anywhere immediately triggers Quick-Pause Workplace Reader
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches && e.touches.length >= 2) {
+                e.preventDefault();
+                if (!game.paused) openWorkplaceReader();
+            }
+        }, { passive: false });
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'p' || key === 'escape' || key === '`') {
+                e.preventDefault();
+                if (game.paused) {
+                    closeWorkplaceReader();
+                } else {
+                    openWorkplaceReader();
+                }
+                return;
+            }
+            if (game.paused || game.gameOver || game.victory) return;
+
+            if (key === '1' || key === 'q') selectLane(0);
+            else if (key === '2' || key === 'w') selectLane(1);
+            else if (key === '3' || key === 'a') selectLane(2);
+            else if (key === '4' || key === 's') selectLane(3);
+            else if (key === 'z') deployUnitToSelectedLane('archer');
+            else if (key === 'x' || key === ' ') {
+                e.preventDefault();
+                deployUnitToSelectedLane('swordsman');
+            }
+        });
+
+        // ------------------------------------------------------------------------------------
+        // 14. QUICK-PAUSE WORKPLACE READER & KEYTRAINSECURE.COM PORTAL FUNCTIONS
+        // ------------------------------------------------------------------------------------
+        function openWorkplaceReader() {
+            game.paused = true;
+            saveGameState();
+            document.title = READER_TITLE;
+
+            if (game.instantRedirectOnPause) {
+                redirectDirectlyToKeyTrain();
+                return;
+            }
+
+            const overlay = document.getElementById('workplaceReaderOverlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+            }
+            populateAiSpecificationText();
+            renderConceptArtSnapshot();
+        }
+
+        function closeWorkplaceReader() {
+            game.paused = false;
+            document.title = ORIGINAL_TITLE;
+            const overlay = document.getElementById('workplaceReaderOverlay');
+            if (overlay) {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        }
+
+        function switchReaderTab(tabId) {
+            const tabs = ['articles', 'portal', 'blueprint'];
+            for (let i = 0; i < tabs.length; i++) {
+                const t = tabs[i];
+                const sec = document.getElementById(`readerSection-${t}`);
+                const btn = document.getElementById(`readerTabBtn-${t}`);
+                if (sec) sec.classList.toggle('hidden', t !== tabId);
+                if (btn) {
+                    btn.className = (t === tabId)
+                        ? 'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-sky-600 text-white'
+                        : 'px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700';
+                }
+            }
+            if (tabId === 'blueprint') {
+                renderConceptArtSnapshot();
+                populateAiSpecificationText();
+            }
+        }
+
+        function toggleInstantRedirectSetting(checked) {
+            game.instantRedirectOnPause = Boolean(checked);
+            try {
+                localStorage.setItem(REDIRECT_PREF_KEY, game.instantRedirectOnPause ? 'true' : 'false');
+            } catch (e) {}
+        }
+
+        function redirectDirectlyToKeyTrain() {
+            saveGameState();
+            try {
+                window.location.assign('https://keytrainsecure.com');
+            } catch (e) {
+                window.open('https://keytrainsecure.com', '_blank', 'noopener,noreferrer');
+            }
+        }
+
+        function renderConceptArtSnapshot() {
+            const snapCanvas = document.getElementById('conceptArtCanvas');
+            if (!snapCanvas) return;
+            const sCtx = snapCanvas.getContext('2d');
+            renderBattlefield(sCtx, snapCanvas.width, snapCanvas.height, true);
+            const snapGeom = computeBattlefieldGeometry(snapCanvas.width, snapCanvas.height);
+            drawHolographicDeploymentGhost(sCtx, snapGeom, {
+                type: 'archer',
+                lane: 0,
+                remaining: 1.5,
+                total: 1.5
+            });
+            drawHolographicDeploymentGhost(sCtx, snapGeom, {
+                type: 'swordsman',
+                lane: 3,
+                remaining: 3.0,
+                total: 3.0
+            });
+        }
+
+        function populateAiSpecificationText() {
+            const pre = document.getElementById('aiSpecPre');
+            if (!pre || pre.textContent.trim().length > 0) return;
+            const firstNode = document.firstChild;
+            if (firstNode && firstNode.nodeType === Node.COMMENT_NODE) {
+                pre.textContent = firstNode.nodeValue.trim();
+            } else {
+                pre.textContent = 'Bastion of the Four Roads - Complete AI Specification loaded.';
+            }
+        }
+
+        function copyAiSpecToClipboard() {
+            populateAiSpecificationText();
+            const pre = document.getElementById('aiSpecPre');
+            const btn = document.getElementById('copySpecBtn');
+            if (!pre) return;
+
+            const textarea = document.createElement('textarea');
+            textarea.value = pre.textContent;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                if (btn) {
+                    const old = btn.textContent;
+                    btn.textContent = 'Copied to Clipboard!';
+                    setTimeout(() => { btn.textContent = old; }, 1800);
+                }
+            } catch (e) {}
+            document.body.removeChild(textarea);
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 15. RESIZE HANDLER & MAIN ANIMATION LOOP BOOTSTRAP
+        // ------------------------------------------------------------------------------------
+        function resizeCanvas() {
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
+            canvas.width = Math.round((window.innerWidth || 960) * dpr);
+            canvas.height = Math.round((window.innerHeight || 640) * dpr);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('beforeunload', saveGameState);
+
+        let lastFrameTime = performance.now();
+        let engineBooted = false;
+
+        function gameLoop(now) {
+            const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
+            lastFrameTime = now;
+
+            updateSimulation(dt);
+            renderBattlefield(ctx, canvas.width, canvas.height, false);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function bootGameEngine() {
+            if (engineBooted) return;
+            engineBooted = true;
+
+            resizeCanvas();
+            generateScenery();
+            initFreshGameState();
+            loadPersistedStateOnce();
+            renderBattlefield(ctx, canvas.width, canvas.height, false);
+
+            lastFrameTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = bootGameEngine;
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            bootGameEngine();
+        }
+    </script>
+</body>
