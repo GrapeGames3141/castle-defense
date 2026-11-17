@@ -44,7 +44,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
     NEVER fire across lanes. In-flight arrows are also strictly bound to `arrow.lane`.
   * Selecting a lane displays an animated dashed cyan/gold firing corridor from its corner
     tower down its connected bridge and road up to maximum archer range.
-* SWORDSMAN (Cost: 75g (+20% per upgrade level) | Max 3 per road, +1 every 5 levels | HP: 135 | Melee Damage: 22):
+* SWORDSMAN (Cost: 75g (+20% per upgrade level) | No cap, but each swordsman owned raises the next one's price 2.5% | HP: 135 | Melee Damage: 22):
   * Spawns at the castle gate of the selected lane, marches across the bridge and out along
     the whole road to a forward post near its far end (`dist = 0.86`), charges any enemy on
     that lane, blocks it in melee, and shatters shields on contact (`enemy.arrowResist = 0`).
@@ -867,9 +867,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         // Units get pricier as their type is upgraded; swordsmen are capped per road
         function unitCost(type) {
             const lv = game.levels ? game.levels[type] : 1;
-            return Math.round((UNITS[type].cost * (1 + 0.2 * (lv - 1))) / 5) * 5;
+            // Swordsmen also cost more for every one already in your army (dead ones make the next cheaper)
+            const army = type === 'swordsman' && game.swordsmen ? 1 + ARMY_COST_STEP * game.swordsmen.length : 1;
+            return Math.round((UNITS[type].cost * (1 + 0.2 * (lv - 1)) * army) / 5) * 5;
         }
-        function swordCap() { return Math.min(6, 3 + Math.floor((game.levels.swordsman - 1) / 5)); }
+        const ARMY_COST_STEP = 0.025;
+        function swordCap() { return Infinity; }   // no cap: raise as big an army as you can afford
         function laneSwordCount(l) { return game.swordsmen.filter(s => s.lane === l).length; }
 
         function upgradeCost(unitType) {
@@ -964,7 +967,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 bounty: 100, arrowResist: 0.5, radius: 22, siege: true
             },
             warlord: {  // Boss of every tenth wave
-                type: 'warlord', name: 'Ogre Warlord', hp: 900, speed: 0.03, damage: 60, attackInterval: 1.8,
+                type: 'warlord', name: 'Ogre Warlord', hp: 650, speed: 0.03, damage: 42, attackInterval: 1.8,
                 bounty: 400, arrowResist: 0.25, radius: 30, boss: true
             }
         };
@@ -1578,7 +1581,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             : []
                     ),
                     swordsmen: Array.isArray(game.swordsmen)
-                        ? game.swordsmen.slice(0, 24).map(s => ({
+                        ? game.swordsmen.slice(0, 80).map(s => ({
                             lane: [0, 1, 2, 3].includes(s.lane) ? s.lane : 0,
                             dist: Math.max(0.05, Math.min(0.95, Number(s.dist) || 0.25)),
                             hp: Math.max(1, Number(s.hp) || UNITS.swordsman.hp),
@@ -1667,7 +1670,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
                 // Hydrate bridge swordsmen
                 game.swordsmen = Array.isArray(data.swordsmen)
-                    ? data.swordsmen.slice(0, 24).map(s => ({
+                    ? data.swordsmen.slice(0, 80).map(s => ({
                         lane: [0, 1, 2, 3].includes(s.lane) ? s.lane : 0,
                         dist: Math.max(0.05, Math.min(0.95, Number(s.dist) || 0.28)),
                         hp: Math.max(1, Math.min(UNITS.swordsman.maxHp, Number(s.hp) || UNITS.swordsman.hp)),
@@ -1826,10 +1829,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 const sameLaneCount = game.swordsmen.filter(s => s.lane === laneIdx).length;
                 if (sameLaneCount >= swordCap()) return;
                 const lateral = ((sameLaneCount % 3) - 1) * 11 * geom.scale;
+                const row = Math.floor(sameLaneCount / 3) % 9;
                 game.swordsmen.push({
                     lane: laneIdx,
                     dist: 0.14,
-                    guardDist: UNITS.swordsman.guardDist - (sameLaneCount % 6) * 0.05,
+                    guardDist: UNITS.swordsman.guardDist - row * 0.045,
                     hp: UNITS.swordsman.hp,
                     maxHp: UNITS.swordsman.maxHp,
                     cooldown: 0.1,
@@ -2297,7 +2301,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const selLaneSwords = game.swordsmen.filter(s => s.lane === game.selectedLane).length;
 
             if (archerCountBadge) archerCountBadge.textContent = `${selTowerArchers}/3`;
-            if (swordsmanCountBadge) swordsmanCountBadge.textContent = `${selLaneSwords}/${swordCap()}`;
+            if (swordsmanCountBadge) swordsmanCountBadge.textContent = `${selLaneSwords}`;
             const aCost = document.getElementById('archerCostText');
             const sCost = document.getElementById('swordCostText');
             if (aCost) aCost.textContent = unitCost('archer');
