@@ -48,7 +48,15 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
   * Spawns at the castle gate of the selected lane, marches across the bridge and out along
     the whole road to a forward post near its far end (`dist = 0.86`), charges any enemy on
     that lane, blocks it in melee, and shatters shields on contact (`enemy.arrowResist = 0`).
-* UPGRADES (Levels 1-6, bought with gold: 150 / 300 / 500 / 750 / 1050g, keys [C] / [V]):
+* THEMED WAVES: every wave has an identity (Goblin Rush, Shield Wall, Pincer, Wolf Pack, Ogre
+  Siege, Hunter Ambush, Battering Rams, Shaman Coven) announced before it starts, with the
+  roads it will use; every tenth wave is an Ogre Warlord boss. START NOW skips the lull for gold.
+* EXTRA ENEMIES: Wolf Rider (fast), Goblin Hunter (shoots swordsmen), Orc Shaman (heals),
+  Battering Ram (ignores swordsmen, heavy gate damage), Ogre Warlord (boss).
+* BOONS: after every odd wave pick one of three stackable perks. ABILITIES: Arrow Volley [E]
+  and Rally [R] on the selected road, on cooldowns. OBJECTIVES: bonus gold for taking no castle
+  damage and for beating the wave's par time. ENDLESS MODE after wave 40, best run recorded.
+* UPGRADES (Levels 1-25, bought with gold from 150g, rising each level, keys [C] / [V]):
   * Archer levels add damage, fire rate and quiver size; Swordsman levels add damage and HP.
     Each level applies to every unit of that type already on the field and all future ones.
 
@@ -238,6 +246,44 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         body.land.short .upgrade-btn { flex-direction: column; gap: 1px; padding: 4px 7px; }
         body.land .upgrade-btn .upg-word { display: none; }
         @media (max-width: 480px) { .unit-card .card-extra { display: none; } }
+        /* ---------- Wave chip, abilities, perk picker ---------- */
+        #waveChip {
+            pointer-events: auto; align-self: flex-start; max-width: 100%;
+            display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+            background: rgba(15, 23, 42, 0.84); border: 2px solid #111827; border-radius: 10px;
+            padding: 3px 9px; color: #e2e8f0; font-size: 11px; line-height: 1.25;
+        }
+        #waveChip .ok { color: #86efac; } #waveChip .bad { color: #fca5a5; } #waveChip .hot { color: #fde047; }
+        #startWaveBtn {
+            background: linear-gradient(180deg, #fbbf24, #d97706); border: 2px solid #111827; border-radius: 8px;
+            padding: 1px 8px; color: #fff; cursor: pointer; font-size: 11px;
+        }
+        #perkStrip { letter-spacing: 1px; }
+        body.land #waveChip { align-self: center; }
+        #abilityRow { display: flex; gap: 8px; pointer-events: auto; margin-bottom: 6px; }
+        .ability-btn {
+            display: flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 12px; cursor: pointer;
+            border: 3px solid #111827; color: #fff; font-size: 12px; line-height: 1.1;
+            background: linear-gradient(180deg, #c4b5fd 0%, #7c3aed 55%, #4c1d95 100%);
+            box-shadow: 0 4px 0 rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.4);
+            transition: transform 0.08s ease, filter 0.12s ease;
+        }
+        .ability-btn:active:not(.cooling) { transform: translateY(2px); }
+        .ability-btn.cooling { filter: saturate(0.3) brightness(0.7); cursor: not-allowed; }
+        .ability-btn .cd { color: #fde047; min-width: 1.6em; text-align: center; }
+        body.land #laneDock { flex-direction: row; align-items: center; gap: 8px; }
+        body.land #laneDock > div { margin-bottom: 0; }
+        body.land.short .lane-lbl { display: none; }
+        .perk-card {
+            width: 210px; max-width: 100%; padding: 10px 12px; cursor: pointer; text-align: center; color: #fff;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            transition: transform 0.08s ease, filter 0.12s ease;
+        }
+        .perk-card:hover { filter: brightness(1.15); transform: translateY(-2px); }
+        .perk-card .perk-icon { font-size: 26px; line-height: 1.1; }
+        .perk-card .perk-desc { font-size: 12px; color: #cbd5e1; font-weight: 600; }
+        .perk-card .perk-own { font-size: 10px; color: #fcd34d; font-weight: 700; }
+        @media (max-height: 460px) { .perk-card { width: 180px; padding: 6px 9px; } .perk-card .perk-icon { font-size: 20px; } }
         @keyframes goldPop {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.13); }
@@ -327,6 +373,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             </div>
         </div>
 
+        <div id="waveChip" class="font-cartoon-sm">
+            <span id="waveChipText">MIXED WARBAND</span>
+            <button id="startWaveBtn" class="font-cartoon-sm" onclick="startWaveNow()">START NOW</button>
+            <span id="perkStrip"></span>
+        </div>
     </div>
 
     <!-- BOTTOM TACTICAL DEPLOYMENT CARDS (ONE-CLICK DEPLOY TO LAST SELECTED LANE) -->
@@ -370,9 +421,17 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
         <!-- BOTTOM-CENTER: SELECTED LANE & DEPLOYMENT FEEDBACK PILL -->
         <div id="laneDock">
+        <div id="abilityRow">
+            <button id="abilVolley" class="ability-btn font-cartoon-sm" onclick="useAbility('volley')" title="Arrow Volley on the selected road [E]">
+                <span>&#127993;</span><span>VOLLEY</span><span id="abilVolleyCd" class="cd"></span>
+            </button>
+            <button id="abilRally" class="ability-btn font-cartoon-sm" onclick="useAbility('rally')" title="Rally 2 free swordsmen to the selected road [R]">
+                <span>&#128737;</span><span>RALLY</span><span id="abilRallyCd" class="cd"></span>
+            </button>
+        </div>
         <!-- COMPACT SUB-BAR: LANE SELECTION PILLS (1-4) & STATUS -->
         <div class="flex items-center justify-center gap-1 sm:gap-1.5 pointer-events-auto mb-1.5">
-            <span class="hidden sm:inline text-[11px] sm:text-xs font-cartoon-sm text-amber-200 bg-black/60 px-2 py-0.5 rounded-full border border-white/15">
+            <span class="lane-lbl hidden sm:inline text-[11px] sm:text-xs font-cartoon-sm text-amber-200 bg-black/60 px-2 py-0.5 rounded-full border border-white/15">
                 TARGET LANE:
             </span>
             <button onclick="selectLane(0)" id="laneBtn0"
@@ -435,6 +494,15 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         </div>
     </div>
 
+    <!-- BETWEEN-WAVE BOON PICKER -->
+    <div id="perkModal" class="fixed inset-0 z-30 hidden items-center justify-center bg-black/80 p-3 overflow-y-auto">
+        <div class="text-center w-full max-w-3xl">
+            <h2 class="font-cartoon text-2xl sm:text-3xl text-amber-300 mb-1">CHOOSE A BOON</h2>
+            <p id="perkModalSub" class="font-cartoon-sm text-slate-200 text-xs sm:text-sm mb-3"></p>
+            <div id="perkChoices" class="flex flex-wrap justify-center gap-3"></div>
+        </div>
+    </div>
+
     <!-- VICTORY / DEFEAT MODAL OVERLAY -->
     <div id="endGameModal" class="fixed inset-0 z-30 hidden items-center justify-center bg-black/75 p-4">
         <div class="hud-pill max-w-md w-full p-6 text-center border-4 border-amber-400 bg-slate-900">
@@ -456,6 +524,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     <div id="endStatGold" class="font-cartoon text-xl text-amber-300">0</div>
                 </div>
             </div>
+            <p id="endBestWave" class="font-cartoon-sm text-amber-200 text-sm -mt-3 mb-4"></p>
+            <button id="endlessBtn" onclick="continueEndless()"
+                    class="upgrade-btn hidden w-full py-3 mb-3 font-cartoon text-white text-lg tracking-wider">
+                KEEP FIGHTING (ENDLESS)
+            </button>
             <button onclick="resetNewBattle()"
                     class="unit-card w-full py-3 font-cartoon text-white text-lg tracking-wider">
                 PLAY AGAIN
@@ -770,8 +843,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         };
 
         // Gold-bought upgrades: every level strengthens all current and future units of that type
-        const MAX_UNIT_LEVEL = 6;
-        const UPGRADE_COSTS = [150, 300, 500, 750, 1050];
+        const MAX_UNIT_LEVEL = 25;
+        const UPGRADE_COSTS = [150, 300, 500, 800, 1200, 1800, 2600, 3600, 5000];
         const BASE_STATS = {
             archer: { damage: UNITS.archer.damage, fireInterval: UNITS.archer.fireInterval, maxAmmo: UNITS.archer.maxAmmo },
             swordsman: { damage: UNITS.swordsman.damage, hp: UNITS.swordsman.hp }
@@ -783,14 +856,16 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const sl = game.levels.swordsman - 1;
             UNITS.archer.damage = Math.round(BASE_STATS.archer.damage * (1 + 0.35 * al));
             UNITS.archer.fireInterval = BASE_STATS.archer.fireInterval * Math.pow(0.94, al);
-            UNITS.archer.maxAmmo = BASE_STATS.archer.maxAmmo + 6 * al;
+            UNITS.archer.maxAmmo = BASE_STATS.archer.maxAmmo + 6 * al + 10 * perk('quiver');
             UNITS.swordsman.damage = Math.round(BASE_STATS.swordsman.damage * (1 + 0.35 * sl));
             UNITS.swordsman.hp = UNITS.swordsman.maxHp = Math.round(BASE_STATS.swordsman.hp * (1 + 0.4 * sl));
         }
 
         function upgradeCost(unitType) {
             const lv = game.levels[unitType];
-            return lv >= MAX_UNIT_LEVEL ? null : UPGRADE_COSTS[lv - 1];
+            if (lv >= MAX_UNIT_LEVEL) return null;
+            // Fixed prices for the first levels, then +1500g per level so late gold always has a use
+            return lv <= UPGRADE_COSTS.length ? UPGRADE_COSTS[lv - 1] : 5000 + (lv - UPGRADE_COSTS.length) * 1500;
         }
 
         function upgradeUnit(unitType) {
@@ -860,6 +935,26 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 bounty: 80,
                 arrowResist: 0.15,
                 radius: 21
+            },
+            wolf: {     // Fast: outruns arrows unless something blocks it
+                type: 'wolf', name: 'Wolf Rider', hp: 58, speed: 0.135, damage: 11, attackInterval: 0.9,
+                bounty: 30, arrowResist: 0.0, radius: 15
+            },
+            hunter: {   // Ranged: shoots swordsmen from a distance
+                type: 'hunter', name: 'Goblin Hunter', hp: 52, speed: 0.07, damage: 10, attackInterval: 1.4,
+                bounty: 40, arrowResist: 0.0, radius: 13, ranged: true
+            },
+            shaman: {   // Healer: mends nearby enemies on its road
+                type: 'shaman', name: 'Orc Shaman', hp: 85, speed: 0.05, damage: 8, attackInterval: 1.4,
+                bounty: 60, arrowResist: 0.1, radius: 14, healer: true
+            },
+            ram: {      // Siege: ignores swordsmen and goes straight for the gate
+                type: 'ram', name: 'Battering Ram', hp: 300, speed: 0.045, damage: 55, attackInterval: 2.0,
+                bounty: 100, arrowResist: 0.5, radius: 22, siege: true
+            },
+            warlord: {  // Boss of every tenth wave
+                type: 'warlord', name: 'Ogre Warlord', hp: 900, speed: 0.03, damage: 60, attackInterval: 1.8,
+                bounty: 400, arrowResist: 0.25, radius: 30, boss: true
             }
         };
 
@@ -935,6 +1030,15 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             wave: 1,
             maxWaves: 40,
             levels: { archer: 1, swordsman: 1 },
+            perks: {},            // perk id -> stacks
+            perkChoices: null,    // three perk ids while the boon picker is open
+            cooldowns: { volley: 0, rally: 0 },
+            waveInfo: { theme: 'mixed', name: 'MIXED WARBAND', lanes: [0, 1, 2, 3], par: 60 },
+            intermission: true,   // true until the first enemy of the wave spawns
+            waveTime: 0,
+            waveDamage: 0,
+            endless: false,
+            bolts: [],
             selectedLane: 0, // 0: NW, 1: NE, 2: SW, 3: SE
             deployment: null, // { type, lane, remaining, total } - strict one-at-a-time lock
             archers: [[], [], [], []], // Strict lane-locked towers: archers[laneIdx]
@@ -994,7 +1098,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         ];
         let geomCache = {};
         // Space (in canvas px) the side docks occupy in landscape; applies to the live canvas only
-        const hudInsets = { side: 0 };
+        const hudInsets = { side: 0, top: 0 };
 
         function computeBattlefieldGeometry(w, h) {
             const key = w + 'x' + h;
@@ -1091,22 +1195,277 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         // ------------------------------------------------------------------------------------
         // 6. WAVE GENERATOR & BATTLE INITIALIZATION
         // ------------------------------------------------------------------------------------
-        function buildWaveQueue(waveNum) {
-            const queue = [];
-            const totalCount = 5 + waveNum * 3;
-            for (let i = 0; i < totalCount; i++) {
-                let type = 'goblin';
-                const r = Math.random();
-                if (waveNum >= 4 && r < Math.min(0.30, (waveNum - 3) * 0.04)) {
-                    type = 'ogre';
-                } else if (waveNum >= 2 && r < Math.min(0.62, 0.25 + waveNum * 0.03)) {
-                    type = 'orc';
+        // ------------------------------------------------------------------------------------
+        // 6a. BOONS (pick one of three between waves), ABILITIES, OBJECTIVES, ENDLESS MODE
+        // ------------------------------------------------------------------------------------
+        const BEST_WAVE_KEY = 'bastion_four_roads_best_wave_v1';
+        const PERKS = {
+            fire:   { name: 'Fire Arrows',    max: 3,  icon: '\u{1F525}', desc: 'Arrows set enemies ablaze: +4 damage per second for 3s.' },
+            pierce: { name: 'Bodkin Points',  max: 2,  icon: '\u{1F3AF}', desc: 'Arrows ignore half of enemy armor and shields.' },
+            medics: { name: 'Field Medics',   max: 3,  icon: '\u{271A}',  desc: 'Swordsmen regenerate 4 HP per second.' },
+            taxes:  { name: 'Tax Collectors', max: 4,  icon: '\u{1F4B0}', desc: '+2 gold per second.' },
+            bounty: { name: 'Bounty Hunters', max: 3,  icon: '\u{2620}',  desc: '+20% gold from every kill.' },
+            masons: { name: 'Master Masons',  max: 99, icon: '\u{1F9F1}', desc: 'Repair 250 castle HP and add +100 max HP.' },
+            quiver: { name: 'Deep Quivers',   max: 3,  icon: '\u{1F3F9}', desc: 'Archers carry +10 arrows.' },
+            muster: { name: 'Quick Muster',   max: 3,  icon: '\u{26A1}',  desc: 'Units deploy 20% faster.' },
+            spikes: { name: 'Spiked Shields', max: 3,  icon: '\u{1F6E1}', desc: 'Enemies that strike a swordsman take 8 damage.' },
+            drums:  { name: 'War Drums',      max: 3,  icon: '\u{1F941}', desc: 'Abilities recharge 20% faster.' }
+        };
+        const ABILITIES = {
+            volley: { name: 'VOLLEY', cd: 28 },
+            rally:  { name: 'RALLY',  cd: 55 }
+        };
+
+        function perk(id) { return (game.perks && game.perks[id]) || 0; }
+
+        function offerPerks() {
+            const pool = Object.keys(PERKS).filter(id => perk(id) < PERKS[id].max);
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+            if (pool.length === 0) return;
+            game.perkChoices = pool.slice(0, 3);
+            showPerkModal();
+        }
+
+        function showPerkModal() {
+            const modal = document.getElementById('perkModal');
+            const box = document.getElementById('perkChoices');
+            const sub = document.getElementById('perkModalSub');
+            if (!modal || !box || !game.perkChoices) return;
+            if (sub) sub.textContent = `Wave ${game.wave - 1} cleared. Pick one reward for the rest of the battle.`;
+            box.innerHTML = '';
+            game.perkChoices.forEach((id, idx) => {
+                const pk = PERKS[id];
+                const btn = document.createElement('button');
+                btn.className = 'perk-card hud-pill';
+                btn.onclick = () => choosePerk(idx);
+                const own = pk.max > 9 ? (perk(id) ? `Taken ${perk(id)}x` : 'Repeatable') : `Owned ${perk(id)} / ${pk.max}`;
+                btn.innerHTML = `<span class="perk-icon">${pk.icon}</span>` +
+                    `<span class="font-cartoon text-base">${pk.name}</span>` +
+                    `<span class="perk-desc">${pk.desc}</span>` +
+                    `<span class="perk-own">${own} &nbsp; [${idx + 1}]</span>`;
+                box.appendChild(btn);
+            });
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function choosePerk(idx) {
+            if (!game.perkChoices || !game.perkChoices[idx]) return;
+            const id = game.perkChoices[idx];
+            game.perks[id] = perk(id) + 1;
+            game.perkChoices = null;
+            if (id === 'masons') {
+                game.maxCastleHp += 100;
+                game.castleHp = Math.min(game.maxCastleHp, game.castleHp + 250);
+            }
+            if (id === 'quiver') {
+                applyUnitLevels();
+                game.archers.forEach(list => list.forEach(a => { a.ammo = UNITS.archer.maxAmmo; }));
+            }
+            const modal = document.getElementById('perkModal');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+            addFloatingText(`${PERKS[id].name.toUpperCase()}!`, geom.cx, geom.cy - 120 * geom.scale, '#c4b5fd', 19);
+            sfx.playSpawned();
+            saveGameState();
+            updateHudDom();
+        }
+
+        function abilityCooldown(id) {
+            return ABILITIES[id].cd * Math.max(0.3, 1 - 0.2 * perk('drums'));
+        }
+
+        function useAbility(id) {
+            if (game.paused || game.gameOver || game.victory || game.perkChoices || !ABILITIES[id]) return;
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+            const laneIdx = game.selectedLane;
+            const lane = geom.lanes[laneIdx];
+            if (game.cooldowns[id] > 0) {
+                sfx.playError();
+                addFloatingText(`${ABILITIES[id].name} READY IN ${Math.ceil(game.cooldowns[id])}s`, lane.ringX, lane.ringY - 25, '#fbbf24', 14);
+                return;
+            }
+            if (id === 'volley') {
+                const targets = game.enemies.filter(e => e.lane === laneIdx && e.hp > 0);
+                if (targets.length === 0) {
+                    sfx.playError();
+                    addFloatingText('NO ENEMIES ON THIS ROAD', lane.ringX, lane.ringY - 25, '#f87171', 14);
+                    return;
                 }
-                const lane = (i + waveNum) % 4;
-                const delay = i === 0 ? 0.8 : Math.max(0.55, 2.1 - waveNum * 0.06) + Math.random() * 0.6;
+                const dmg = 45 + 20 * game.levels.archer;
+                const rain = (pt, enemy, fx) => game.arrows.push({
+                    lane: laneIdx,
+                    startX: pt.x - (60 + Math.random() * 40) * geom.scale,
+                    startY: pt.y - (300 + Math.random() * 120) * geom.scale,
+                    targetX: pt.x, targetY: pt.y, targetEnemy: enemy,
+                    progress: -Math.random() * 0.35, speed: 2.6, arcHeight: 0, damage: dmg, fx
+                });
+                targets.forEach(e => rain(laneDistToXY(geom, laneIdx, e.dist, e.lateral), e, false));
+                for (let k = 0; k < 14; k++) {
+                    rain(laneDistToXY(geom, laneIdx, 0.15 + Math.random() * 0.8, (Math.random() - 0.5) * 34 * geom.scale), null, true);
+                }
+                sfx.playBow();
+                addFloatingText('ARROW VOLLEY!', lane.ringX, lane.ringY - 25, '#c4b5fd', 17);
+            } else if (id === 'rally') {
+                completeActiveDeployment({ type: 'swordsman', lane: laneIdx });
+                completeActiveDeployment({ type: 'swordsman', lane: laneIdx });
+                addFloatingText('RALLY!', lane.ringX, lane.ringY - 44, '#c4b5fd', 17);
+            }
+            game.cooldowns[id] = abilityCooldown(id);
+            saveGameState();
+            updateHudDom();
+        }
+
+        function waveRewards(waveNum) {
+            return { flawless: 30 + 4 * waveNum, swift: 20 + 3 * waveNum };
+        }
+
+        function startWaveNow() {
+            if (game.paused || game.gameOver || game.victory || game.perkChoices) return;
+            if (!game.intermission || game.spawnTimer <= 1) return;
+            const bonus = Math.round(game.spawnTimer * 4);
+            game.gold += bonus;
+            game.spawnTimer = 0.2;
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+            addFloatingText(`EARLY START! +${bonus}g`, geom.cx, geom.cy - 120 * geom.scale, '#fde047', 18);
+            sfx.playGold();
+            pulseGoldBadge();
+        }
+
+        function readBestWave() {
+            try { return Math.max(0, Math.floor(Number(localStorage.getItem(BEST_WAVE_KEY)) || 0)); } catch (e) { return 0; }
+        }
+
+        function recordBestWave(waveNum) {
+            if (waveNum > readBestWave()) {
+                try { localStorage.setItem(BEST_WAVE_KEY, String(waveNum)); } catch (e) {}
+            }
+        }
+
+        function beginNextWave() {
+            game.wave += 1;
+            game.castleHp = Math.min(game.maxCastleHp, game.castleHp + 60);
+            game.waveQueue = buildWaveQueue(game.wave);
+            game.intermission = true;
+            game.spawnTimer = 12;
+            game.waveTime = 0;
+            game.waveDamage = 0;
+        }
+
+        function onWaveCleared(geom) {
+            const cleared = game.wave;
+            const rw = waveRewards(cleared);
+            let total = 75;
+            const lines = [`WAVE ${cleared} CLEARED! +75g`];
+            if (game.waveDamage <= 0) { total += rw.flawless; lines.push(`FLAWLESS DEFENSE +${rw.flawless}g`); }
+            if (game.waveTime <= game.waveInfo.par) { total += rw.swift; lines.push(`SWIFT VICTORY +${rw.swift}g`); }
+            game.gold += total;
+            lines.forEach((ln, i) => addFloatingText(ln, geom.cx, geom.cy - (95 - i * 24) * geom.scale, i ? '#86efac' : '#fde047', i ? 15 : 19));
+            sfx.playGold();
+            pulseGoldBadge();
+            recordBestWave(cleared);
+
+            if (!game.endless && cleared >= game.maxWaves) {
+                game.victory = true;
+                showEndGameModal(true);
+                return;
+            }
+            beginNextWave();
+            if (cleared % 2 === 1) offerPerks();
+            saveGameState();
+        }
+
+        function continueEndless() {
+            if (!game.victory) return;
+            game.endless = true;
+            game.victory = false;
+            const modal = document.getElementById('endGameModal');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            beginNextWave();
+            offerPerks();
+            saveGameState();
+            updateHudDom();
+        }
+
+        // ------------------------------------------------------------------------------------
+        // 6b. THEMED WAVE PLANNER (every wave has an identity; every tenth wave is a boss)
+        // ------------------------------------------------------------------------------------
+        const WAVE_THEMES = {
+            mixed:  { name: 'MIXED WARBAND',  from: 1, lanes: 4, count: 1.0, pace: 1.0 },
+            rush:   { name: 'GOBLIN RUSH',    from: 3, lanes: 1, count: 1.1, pace: 0.55, roll: (w, r) => (w >= 5 && r < 0.25) ? 'wolf' : 'goblin' },
+            pincer: { name: 'PINCER ATTACK',  from: 3, lanes: 2, count: 1.0, pace: 0.9 },
+            wall:   { name: 'SHIELD WALL',    from: 4, lanes: 2, count: 0.8, pace: 1.0, roll: (w, r) => r < 0.7 ? 'orc' : 'goblin' },
+            pack:   { name: 'WOLF PACK',      from: 5, lanes: 2, count: 0.8, pace: 0.7, roll: (w, r) => r < 0.75 ? 'wolf' : 'goblin' },
+            siege:  { name: 'OGRE SIEGE',     from: 6, lanes: 2, count: 0.6, pace: 1.3, roll: (w, r) => r < 0.45 ? 'ogre' : (r < 0.75 ? 'orc' : 'goblin') },
+            ambush: { name: 'HUNTER AMBUSH',  from: 7, lanes: 4, count: 0.8, pace: 1.0, roll: (w, r) => r < 0.45 ? 'hunter' : (r < 0.7 ? 'orc' : 'goblin') },
+            rams:   { name: 'BATTERING RAMS', from: 8, lanes: 2, count: 0.6, pace: 1.0, roll: (w, r) => r < 0.5 ? 'orc' : 'goblin' },
+            coven:  { name: 'SHAMAN COVEN',   from: 9, lanes: 2, count: 0.7, pace: 1.1, roll: (w, r) => r < 0.2 ? 'shaman' : (r < 0.65 ? 'orc' : (r < 0.8 ? 'ogre' : 'goblin')) },
+            boss:   { name: 'OGRE WARLORD',   from: 10, lanes: 1, count: 0.7, pace: 1.0 }
+        };
+
+        function planWave(waveNum, prevTheme) {
+            const pick = (a) => a[Math.floor(Math.random() * a.length)];
+            let theme = 'mixed';
+            if (waveNum % 10 === 0) {
+                theme = 'boss';
+            } else if (waveNum > 2) {
+                const pool = Object.keys(WAVE_THEMES).filter(k => k !== 'boss' && k !== prevTheme && WAVE_THEMES[k].from <= waveNum);
+                theme = pick(pool);
+            }
+            const T = WAVE_THEMES[theme];
+            const eff = Math.min(waveNum, 40) + Math.max(0, waveNum - 40) * 0.35;
+            const baseDelay = Math.max(0.55, 2.1 - waveNum * 0.06);
+            const focus = Math.floor(Math.random() * 4);
+            let lanes = [0, 1, 2, 3];
+            if (T.lanes === 1) lanes = [focus];
+            else if (T.lanes === 2) lanes = theme === 'pincer' ? pick([[0, 3], [1, 2]]) : pick([[0, 1], [2, 3], [0, 2], [1, 3]]);
+
+            const mixedType = () => {
+                const r = Math.random();
+                if (waveNum >= 4 && r < Math.min(0.30, (waveNum - 3) * 0.04)) return 'ogre';
+                if (waveNum >= 2 && r < Math.min(0.62, 0.25 + waveNum * 0.03)) return 'orc';
+                const x = Math.random();
+                if (waveNum >= 5 && x < 0.12) return 'wolf';
+                if (waveNum >= 7 && x < 0.22) return 'hunter';
+                if (waveNum >= 9 && x < 0.27) return 'shaman';
+                return 'goblin';
+            };
+
+            const queue = [];
+            const count = Math.max(4, Math.round((5 + eff * 3) * T.count));
+            for (let i = 0; i < count; i++) {
+                const type = T.roll ? T.roll(waveNum, Math.random()) : mixedType();
+                let lane;
+                if (T.lanes === 1) lane = Math.random() < (theme === 'boss' ? 0.5 : 0.78) ? focus : Math.floor(Math.random() * 4);
+                else if (T.lanes === 2) lane = lanes[i % 2];
+                else lane = (i + waveNum) % 4;
+                const delay = i === 0 ? 0.8 : (baseDelay + Math.random() * 0.6) * T.pace;
                 queue.push({ type, lane, delay });
             }
-            return queue;
+            if (theme === 'rams') {
+                const perLane = 1 + Math.floor(waveNum / 10);
+                for (let k = 0; k < perLane * 2; k++) {
+                    queue.splice(Math.min(queue.length, 2 + k * 3), 0, { type: 'ram', lane: lanes[k % 2], delay: 2.0 });
+                }
+            }
+            if (theme === 'boss') {
+                const bosses = 1 + Math.floor(waveNum / 20);
+                for (let k = 0; k < bosses; k++) {
+                    queue.splice(Math.min(queue.length, Math.floor(queue.length * 0.3) + k * 4), 0, { type: 'warlord', lane: focus, delay: 2.5 });
+                }
+            }
+            let par = 30 + (theme === 'boss' ? 30 : 0);
+            queue.forEach(q => { par += q.delay; });
+            return { queue, info: { theme, name: T.name, lanes: lanes.slice(), par: Math.round(par) } };
+        }
+
+        function buildWaveQueue(waveNum) {
+            const plan = planWave(waveNum, game.waveInfo ? game.waveInfo.theme : null);
+            game.waveInfo = plan.info;
+            return plan.queue;
         }
 
         function initFreshGameState() {
@@ -1116,6 +1475,15 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             game.passiveGoldAccum = 0;
             game.wave = 1;
             game.levels = { archer: 1, swordsman: 1 };
+            game.perks = {};
+            game.perkChoices = null;
+            game.cooldowns = { volley: 0, rally: 0 };
+            game.waveInfo = null;
+            game.intermission = true;
+            game.waveTime = 0;
+            game.waveDamage = 0;
+            game.endless = false;
+            game.bolts = [];
             applyUnitLevels();
             game.selectedLane = 0;
             game.deployment = null;
@@ -1126,17 +1494,19 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             game.particles = [];
             game.floatingTexts = [];
             game.waveQueue = buildWaveQueue(1);
-            game.spawnTimer = 4.0;           // 4-second grace period before first enemy spawns
+            game.spawnTimer = 8.0;           // grace period before the first enemy (START NOW skips it)
             game.waveBannerTimer = 2.8;
             game.gameOver = false;
             game.victory = false;
             game.totalKills = 0;
 
-            const modal = document.getElementById('endGameModal');
-            if (modal) {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            }
+            ['endGameModal', 'perkModal'].forEach((id) => {
+                const modal = document.getElementById(id);
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }
+            });
             updateHudDom();
         }
 
@@ -1157,7 +1527,16 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     timestamp: Date.now(),
                     castleHp: Number(game.castleHp) || 1000,
                     gold: Math.floor(Number(game.gold) || 0),
-                    wave: Math.max(1, Math.min(game.maxWaves, Number(game.wave) || 1)),
+                    wave: Math.max(1, Math.min(game.endless ? 9999 : game.maxWaves, Number(game.wave) || 1)),
+                    perks: game.perks,
+                    perkChoices: game.perkChoices,
+                    cooldowns: game.cooldowns,
+                    waveInfo: game.waveInfo,
+                    intermission: Boolean(game.intermission),
+                    waveTime: Number(game.waveTime) || 0,
+                    waveDamage: Number(game.waveDamage) || 0,
+                    endless: Boolean(game.endless),
+                    maxCastleHp: Number(game.maxCastleHp) || 1000,
                     levels: { archer: game.levels.archer, swordsman: game.levels.swordsman },
                     selectedLane: [0, 1, 2, 3].includes(game.selectedLane) ? game.selectedLane : 0,
                     totalKills: Number(game.totalKills) || 0,
@@ -1193,6 +1572,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             dist: Math.max(0.08, Math.min(1.05, Number(e.dist) || 0.85)),
                             hp: Math.max(1, Number(e.hp) || 40),
                             maxHp: Math.max(1, Number(e.maxHp) || 40),
+                            damage: Number(e.damage) || 0,
                             arrowResist: Number(e.arrowResist) || 0,
                             hasShield: Boolean(e.hasShield),
                             lateral: Number(e.lateral) || 0
@@ -1219,9 +1599,29 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 const hp = Number(data.castleHp);
                 if (!Number.isFinite(hp) || hp <= 0) return false;
 
+                game.maxCastleHp = Math.max(1000, Math.min(20000, Number(data.maxCastleHp) || 1000));
                 game.castleHp = Math.min(game.maxCastleHp, Math.max(1, hp));
+                game.endless = Boolean(data.endless);
+                game.perks = {};
+                if (data.perks && typeof data.perks === 'object') {
+                    Object.keys(PERKS).forEach((id) => {
+                        const n = Math.floor(Number(data.perks[id]) || 0);
+                        if (n > 0) game.perks[id] = Math.min(PERKS[id].max, n);
+                    });
+                }
+                game.cooldowns = {
+                    volley: Math.max(0, Math.min(120, Number(data.cooldowns && data.cooldowns.volley) || 0)),
+                    rally: Math.max(0, Math.min(120, Number(data.cooldowns && data.cooldowns.rally) || 0))
+                };
+                game.intermission = Boolean(data.intermission);
+                game.waveTime = Math.max(0, Number(data.waveTime) || 0);
+                game.waveDamage = Math.max(0, Number(data.waveDamage) || 0);
+                const wi = data.waveInfo;
+                game.waveInfo = (wi && WAVE_THEMES[wi.theme] && Array.isArray(wi.lanes))
+                    ? { theme: wi.theme, name: WAVE_THEMES[wi.theme].name, lanes: wi.lanes.filter(l => [0, 1, 2, 3].includes(l)), par: Math.max(20, Number(wi.par) || 60) }
+                    : { theme: 'mixed', name: 'MIXED WARBAND', lanes: [0, 1, 2, 3], par: 60 };
                 game.gold = Math.max(0, Math.min(99999, Math.floor(Number(data.gold) || 200)));
-                game.wave = Math.max(1, Math.min(game.maxWaves, Math.floor(Number(data.wave) || 1)));
+                game.wave = Math.max(1, Math.min(game.endless ? 9999 : game.maxWaves, Math.floor(Number(data.wave) || 1)));
                 const lv = (v) => Math.max(1, Math.min(MAX_UNIT_LEVEL, Math.floor(Number(v) || 1)));
                 game.levels = { archer: lv(data.levels && data.levels.archer), swordsman: lv(data.levels && data.levels.swordsman) };
                 applyUnitLevels();
@@ -1267,7 +1667,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             hp: Math.max(1, Number(e.hp) || cfg.hp),
                             maxHp: Math.max(1, Number(e.maxHp) || cfg.hp),
                             speed: cfg.speed,
-                            damage: cfg.damage,
+                            damage: Math.max(1, Math.min(2000, Number(e.damage) || cfg.damage)),
                             attackInterval: cfg.attackInterval,
                             bounty: cfg.bounty,
                             arrowResist: Number.isFinite(Number(e.arrowResist)) ? Number(e.arrowResist) : cfg.arrowResist,
@@ -1302,7 +1702,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     game.waveQueue = [];
                 }
 
-                game.spawnTimer = 2.0;
+                game.spawnTimer = game.intermission ? 6.0 : 2.0;
+                if (Array.isArray(data.perkChoices) && data.perkChoices.length > 0 && data.perkChoices.every(id => PERKS[id])) {
+                    game.perkChoices = data.perkChoices.slice(0, 3);
+                    showPerkModal();
+                }
                 updateHudDom();
                 return true;
             } catch (err) {
@@ -1359,8 +1763,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             game.deployment = {
                 type: unitType,
                 lane: laneIdx,
-                remaining: cfg.deployTime,
-                total: cfg.deployTime
+                remaining: cfg.deployTime * Math.max(0.3, 1 - 0.2 * perk('muster')),
+                total: cfg.deployTime * Math.max(0.3, 1 - 0.2 * perk('muster'))
             };
 
             sfx.playDeploy();
@@ -1414,9 +1818,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         // 9. CORE SIMULATION UPDATE LOOP
         // ------------------------------------------------------------------------------------
         function updateSimulation(dt) {
-            if (game.paused || game.gameOver || game.victory) return;
+            if (game.paused || game.gameOver || game.victory || game.perkChoices) return;
 
             game.animTime += dt;
+            if (!game.intermission) game.waveTime += dt;
+            game.cooldowns.volley = Math.max(0, game.cooldowns.volley - dt);
+            game.cooldowns.rally = Math.max(0, game.cooldowns.rally - dt);
             if (game.waveBannerTimer > 0) {
                 game.waveBannerTimer = Math.max(0, game.waveBannerTimer - dt);
             }
@@ -1424,7 +1831,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
 
             // 1. Passive Castle Gold Income (+4g / sec)
-            game.passiveGoldAccum += 4.0 * dt;
+            game.passiveGoldAccum += (4.0 + 2 * perk('taxes')) * dt;
             if (game.passiveGoldAccum >= 1.0) {
                 const whole = Math.floor(game.passiveGoldAccum);
                 game.gold += whole;
@@ -1446,8 +1853,14 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 game.spawnTimer -= dt;
                 if (game.spawnTimer <= 0) {
                     const nextSpawn = game.waveQueue.shift();
+                    if (game.intermission) {
+                        game.intermission = false;
+                        game.waveBannerTimer = 2.6;
+                    }
                     const cfg = ENEMY_TYPES[nextSpawn.type] || ENEMY_TYPES.goblin;
-                    const waveHpScale = 1 + (game.wave - 1) * 0.11;
+                    const wv = game.wave - 1;
+                    const waveHpScale = 1 + wv * 0.14 + wv * wv * 0.004;
+                    const waveDmgScale = 1 + wv * 0.03;
                     const scaledHp = Math.round(cfg.hp * waveHpScale);
                     const lateral = (Math.random() - 0.5) * 18 * geom.scale;
 
@@ -1459,7 +1872,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         hp: scaledHp,
                         maxHp: scaledHp,
                         speed: cfg.speed,
-                        damage: cfg.damage,
+                        damage: Math.round(cfg.damage * waveDmgScale),
                         attackInterval: cfg.attackInterval,
                         bounty: cfg.bounty,
                         arrowResist: cfg.arrowResist,
@@ -1473,23 +1886,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     game.spawnTimer = game.waveQueue.length > 0 ? game.waveQueue[0].delay : 1.0;
                 }
             } else if (game.enemies.length === 0) {
-                // Wave cleared!
-                if (game.wave >= game.maxWaves) {
-                    game.victory = true;
-                    showEndGameModal(true);
-                    return;
-                } else {
-                    game.wave += 1;
-                    const waveBonus = 75;
-                    game.gold += waveBonus;
-                    game.castleHp = Math.min(game.maxCastleHp, game.castleHp + 60);
-                    game.waveQueue = buildWaveQueue(game.wave);
-                    game.spawnTimer = 2.6;
-                    game.waveBannerTimer = 2.6;
-                    sfx.playGold();
-                    addFloatingText(`WAVE ${game.wave - 1} CLEARED! +${waveBonus}g`, geom.cx, geom.cy - 95 * geom.scale, '#fde047', 19);
-                    saveGameState();
-                }
+                onWaveCleared(geom);
+                if (game.victory) return;
             }
 
             // 4. Update Castle Corner Tower Archers (STRICT SINGLE-LANE TARGETING ONLY: enemy.lane === laneIdx)
@@ -1571,10 +1969,14 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         hitTarget = game.enemies.find(e => e.lane === arr.lane && e.hp > 0 && e.dist <= UNITS.archer.rangeDist);
                     }
 
-                    if (hitTarget && hitTarget.hp > 0) {
-                        const resist = hitTarget.arrowResist || 0;
+                    if (hitTarget && hitTarget.hp > 0 && !arr.fx) {
+                        const resist = (hitTarget.arrowResist || 0) * Math.max(0, 1 - 0.5 * perk('pierce'));
                         const dmg = Math.max(2, Math.round(arr.damage * (1 - resist)));
                         hitTarget.hp -= dmg;
+                        if (perk('fire') > 0) {
+                            hitTarget.burn = 3;
+                            hitTarget.burnDps = 4 * perk('fire');
+                        }
                         hitTarget.hitFlash = 0.15;
 
                         spawnBurstParticles(arr.targetX, arr.targetY - 10, resist > 0.5 ? '#94a3b8' : '#ffffff', 5);
@@ -1589,6 +1991,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 const sw = game.swordsmen[i];
                 if (sw.attackAnim > 0) sw.attackAnim = Math.max(0, sw.attackAnim - dt * 3.5);
                 sw.cooldown = Math.max(0, sw.cooldown - dt);
+                if (perk('medics') > 0 && sw.hp > 0) sw.hp = Math.min(sw.maxHp, sw.hp + 4 * perk('medics') * dt);
 
                 // Find closest enemy on the same lane
                 let laneEnemy = null;
@@ -1653,30 +2056,74 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
                 if (e.hp <= 0) {
                     const pt = laneDistToXY(geom, e.lane, e.dist, e.lateral);
-                    game.gold += e.bounty;
+                    const bounty = Math.round(e.bounty * (1 + 0.2 * perk('bounty')));
+                    game.gold += bounty;
                     game.totalKills += 1;
                     sfx.playGold();
                     spawnBurstParticles(pt.x, pt.y - 10, '#fbbf24', 12);
-                    addFloatingText(`+${e.bounty}g`, pt.x, pt.y - 28, '#fde047', 17);
+                    addFloatingText(`+${bounty}g`, pt.x, pt.y - 28, '#fde047', 17);
                     pulseGoldBadge();
                     game.enemies.splice(i, 1);
                     continue;
                 }
 
-                // Check if blocked by a Swordsman on this lane
-                let blocker = null;
-                for (let j = 0; j < game.swordsmen.length; j++) {
-                    const sw = game.swordsmen[j];
-                    if (sw.lane === e.lane && sw.hp > 0 && Math.abs(e.dist - sw.dist) <= 0.068) {
-                        blocker = sw;
-                        break;
+                const ecfg = ENEMY_TYPES[e.type] || {};
+                if (e.burn > 0) {
+                    e.burn -= dt;
+                    e.hp -= (e.burnDps || 0) * dt;
+                }
+                if (e.healPulse > 0) e.healPulse -= dt;
+                if (ecfg.healer) {
+                    e.healTimer = (e.healTimer === undefined ? 2.5 : e.healTimer) - dt;
+                    if (e.healTimer <= 0) {
+                        e.healTimer = 2.5;
+                        let healed = false;
+                        for (let j = 0; j < game.enemies.length; j++) {
+                            const o = game.enemies[j];
+                            if (o !== e && o.lane === e.lane && o.hp > 0 && o.hp < o.maxHp && Math.abs(o.dist - e.dist) <= 0.14) {
+                                o.hp = Math.min(o.maxHp, o.hp + Math.round(o.maxHp * 0.12) + 10);
+                                healed = true;
+                            }
+                        }
+                        if (healed) e.healPulse = 0.6;
                     }
                 }
 
-                if (blocker) {
+                // Check if blocked by a Swordsman on this lane (battering rams roll straight past)
+                let blocker = null;
+                let shotAt = null;
+                if (!ecfg.siege) {
+                    for (let j = 0; j < game.swordsmen.length; j++) {
+                        const sw = game.swordsmen[j];
+                        if (sw.lane !== e.lane || sw.hp <= 0) continue;
+                        if (Math.abs(e.dist - sw.dist) <= 0.068) {
+                            blocker = sw;
+                            break;
+                        }
+                        if (ecfg.ranged && sw.dist < e.dist && e.dist - sw.dist <= 0.17 && (!shotAt || sw.dist > shotAt.dist)) {
+                            shotAt = sw;
+                        }
+                    }
+                }
+
+                if (!blocker && shotAt) {
+                    // Hunters hold their ground and shoot the nearest swordsman
+                    if (e.cooldown <= 0) {
+                        e.cooldown = e.attackInterval;
+                        shotAt.hp -= e.damage;
+                        const from = laneDistToXY(geom, e.lane, e.dist, e.lateral);
+                        const to = laneDistToXY(geom, e.lane, shotAt.dist, shotAt.lateral);
+                        game.bolts.push({ x0: from.x, y0: from.y - 14 * geom.scale, x1: to.x, y1: to.y - 14 * geom.scale, t: 0 });
+                        addFloatingText(`-${e.damage}`, to.x, to.y - 22, '#fb923c', 14);
+                    }
+                } else if (blocker) {
                     if (e.cooldown <= 0) {
                         e.cooldown = e.attackInterval;
                         blocker.hp -= e.damage;
+                        if (perk('spikes') > 0) {
+                            e.hp -= 8 * perk('spikes');
+                            e.hitFlash = 0.12;
+                        }
                         const pt = laneDistToXY(geom, e.lane, blocker.dist, blocker.lateral);
                         addFloatingText(`-${e.damage}`, pt.x, pt.y - 22, '#fb923c', 14);
                     }
@@ -1687,6 +2134,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     if (e.cooldown <= 0) {
                         e.cooldown = e.attackInterval;
                         game.castleHp = Math.max(0, game.castleHp - e.damage);
+                        game.waveDamage += e.damage;
                         sfx.playCastleHit();
                         const gatePt = laneDistToXY(geom, e.lane, 0.06, 0);
                         spawnBurstParticles(gatePt.x, gatePt.y, '#ef4444', 8);
@@ -1699,6 +2147,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         }
                     }
                 }
+            }
+
+            for (let i = game.bolts.length - 1; i >= 0; i--) {
+                game.bolts[i].t += dt * 5;
+                if (game.bolts[i].t >= 1) game.bolts.splice(i, 1);
             }
 
             // 8. Update Particles & Floating Damage/Gold Popups
@@ -1827,7 +2280,44 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 if (btn) btn.classList.toggle('locked-upg', cost === null || game.gold < cost);
             });
             const waveMaxTxt = document.getElementById('waveMaxText');
-            if (waveMaxTxt) waveMaxTxt.textContent = `${game.maxWaves}`;
+            if (waveMaxTxt) waveMaxTxt.textContent = game.endless ? '\u221E' : `${game.maxWaves}`;
+
+            // Abilities
+            [['volley', 'abilVolley'], ['rally', 'abilRally']].forEach(([id, elId]) => {
+                const btn = document.getElementById(elId);
+                const cdTxt = document.getElementById(elId + 'Cd');
+                const cd = game.cooldowns[id];
+                if (btn) btn.classList.toggle('cooling', cd > 0);
+                if (cdTxt) cdTxt.textContent = cd > 0 ? `${Math.ceil(cd)}s` : '';
+            });
+
+            // Wave chip: preview during the lull, live objectives during the fight
+            const chipTxt = document.getElementById('waveChipText');
+            const startBtn = document.getElementById('startWaveBtn');
+            const info = game.waveInfo || { name: '', lanes: [], par: 60 };
+            const roads = info.lanes.length >= 4 ? 'ALL ROADS' : info.lanes.map(l => LANE_META[l].code).join(' + ');
+            const rw = waveRewards(game.wave);
+            let chipHtml;
+            if (game.intermission) {
+                chipHtml = `<span class="hot">NEXT: ${info.name}</span> \u00B7 ${roads} \u00B7 in ${Math.max(0, Math.ceil(game.spawnTimer))}s`;
+            } else {
+                const flawless = game.waveDamage <= 0;
+                const swift = game.waveTime <= info.par;
+                chipHtml = `<span class="hot">${info.name}</span> \u00B7 ${roads} \u00B7 ` +
+                    `<span class="${flawless ? 'ok' : 'bad'}">${flawless ? '\u2714' : '\u2718'} No dmg +${rw.flawless}g</span> \u00B7 ` +
+                    `<span class="${swift ? 'ok' : 'bad'}">\u23F1 ${Math.floor(game.waveTime)}/${info.par}s +${rw.swift}g</span>`;
+            }
+            if (chipTxt && chipTxt.dataset.h !== chipHtml) { chipTxt.dataset.h = chipHtml; chipTxt.innerHTML = chipHtml; }
+            if (startBtn) {
+                const showStart = game.intermission && game.spawnTimer > 1;
+                startBtn.style.display = showStart ? '' : 'none';
+                if (showStart) startBtn.textContent = `START NOW +${Math.round(game.spawnTimer * 4)}g`;
+            }
+            const strip = document.getElementById('perkStrip');
+            if (strip) {
+                const owned = Object.keys(PERKS).filter(id => perk(id) > 0).map(id => PERKS[id].icon + (perk(id) > 1 ? perk(id) : '')).join(' ');
+                if (strip.dataset.h !== owned) { strip.dataset.h = owned; strip.textContent = owned; }
+            }
 
             const bottomBanner = document.getElementById('bottomHintBanner');
             if (bottomBanner) {
@@ -1850,6 +2340,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             if (!modal) return;
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+            if (!isVictory) recordBestWave(game.wave - 1);
+            const endlessBtn = document.getElementById('endlessBtn');
+            if (endlessBtn) endlessBtn.classList.toggle('hidden', !isVictory);
+            const bestEl = document.getElementById('endBestWave');
+            if (bestEl) bestEl.textContent = readBestWave() > 0 ? `Best run: ${readBestWave()} waves cleared` : '';
 
             if (title) {
                 title.textContent = isVictory ? 'BASTION VICTORIOUS!' : 'CASTLE BREACHED!';
@@ -1862,7 +2357,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     ? 'All 40 waves of the siege have been repelled across all four roads!'
                     : 'Enemy forces overwhelmed the central keep. Regroup and fortify your lanes!';
             }
-            if (statWave) statWave.textContent = `${game.wave} / ${game.maxWaves}`;
+            if (statWave) statWave.textContent = game.endless ? `${game.wave}` : `${game.wave} / ${game.maxWaves}`;
             if (statKills) statKills.textContent = `${game.totalKills}`;
             if (statGold) statGold.textContent = `${Math.floor(game.gold)}g`;
 
@@ -2763,6 +3258,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             drawCastleLiveDetails(c, geom, art, previewMode);
             drawUnitList(c, geom, units.filter(u => u.lane >= 2));
 
+            if (!previewMode) drawWaveWarnings(c, geom);
+
             // 4. Holographic deployment ghost & countdown
             if (!previewMode && game.deployment) {
                 drawHolographicDeploymentGhost(c, geom, game.deployment);
@@ -2968,7 +3465,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             rr(c, 0.6, -6, 3.4, 6, 1.4); paint(c, '#3b2d24', INK, 1.4);
             // Tunic
             rr(c, -5, -14.5, 10, 10, 3.2); paint(c, '#2f6fe0', INK, 1.6);
-            c.fillStyle = game.levels.archer > 1 ? LEVEL_COLORS[game.levels.archer - 1] : '#8a5a2b';
+            c.fillStyle = game.levels.archer > 1 ? LEVEL_COLORS[Math.min(5, game.levels.archer - 1)] : '#8a5a2b';
             c.fillRect(-4.6, -8.2, 9.2, 1.8);
             // Quiver on the back
             c.save();
@@ -3120,7 +3617,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             c.fillStyle = INK;
             rr(c, 0.4, -26.6, 6.2, 2.5, 1); c.fill();
             c.fillRect(2.6, -26, 1.2, 5);
-            ell(c, -0.5, -32.3, 2.3, 3); paint(c, LEVEL_COLORS[game.levels.swordsman - 1] || '#3b82f6', INK, 1.4);
+            ell(c, -0.5, -32.3, 2.3, 3); paint(c, LEVEL_COLORS[Math.min(5, game.levels.swordsman - 1)], INK, 1.4);
 
             // Kite shield
             c.beginPath();
@@ -3157,13 +3654,18 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const flash = en.hitFlash && en.hitFlash > 0;
             const F = (col) => (flash ? '#ffffff' : col);
             const ph = (en.lane || 0) * 2.1 + (en.lateral || 0) * 0.7 + (en.maxHp || 0) * 0.13;
-            const isOgre = en.type === 'ogre';
+            const isBoss = en.type === 'warlord';
+            const isOgre = en.type === 'ogre' || isBoss;
             const isOrc = en.type === 'orc';
+            const isHunter = en.type === 'hunter';
+            const OG = isBoss
+                ? { leg: '#4a3a5e', body: '#6d5389', belly: '#8f74ab', head: '#7a5f96' }
+                : { leg: '#9a4a34', body: '#bf5f45', belly: '#dc8d6f', head: '#c9684d' };
             const pace = isOgre ? 7 : (isOrc ? 10 : 14);
             const step = Math.sin(t * pace + ph);
             const bob = -Math.abs(step) * (isOgre ? 1.6 : 1.1);
             const swing = Math.sin(t * (isOgre ? 3.2 : 5) + ph);
-            const k = scale * (isOgre ? 1.22 : (isOrc ? 1.12 : 1.05));
+            const k = scale * (isBoss ? 1.85 : (isOgre ? 1.22 : (isOrc ? 1.12 : 1.05)));
 
             c.save();
             c.translate(x, y);
@@ -3171,11 +3673,86 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             c.lineJoin = 'round';
             c.lineCap = 'round';
 
-            if (isOgre) {
+            if (en.type === 'wolf') {
+                // Wolf with a goblin rider
+                const run = Math.sin(t * 18 + ph);
+                c.fillStyle = 'rgba(0, 0, 0, 0.30)';
+                ell(c, 0, 1, 14, 4.4); c.fill();
+                c.strokeStyle = INK; c.lineWidth = 4.4;
+                c.beginPath();
+                c.moveTo(-8, -8); c.lineTo(-10 - run * 3, 0);
+                c.moveTo(-4, -8); c.lineTo(-3 + run * 3, 0);
+                c.moveTo(6, -8); c.lineTo(5 - run * 3, 0);
+                c.moveTo(10, -8); c.lineTo(12 + run * 3, 0);
+                c.stroke();
+                c.strokeStyle = F('#7b8591'); c.lineWidth = 2.4;
+                c.stroke();
+                c.translate(0, -Math.abs(run) * 1.4);
+                c.beginPath(); c.moveTo(-11, -12); c.quadraticCurveTo(-19, -17, -17, -9); c.quadraticCurveTo(-14, -9, -11, -9); c.closePath();
+                paint(c, F('#8d97a3'), INK, 1.6);
+                ell(c, 0, -11, 12, 5.6); paint(c, F('#8d97a3'), INK, 1.8);
+                c.beginPath(); c.moveTo(9, -15); c.lineTo(11, -21); c.lineTo(14, -16); c.lineTo(20, -13); c.lineTo(20, -10); c.lineTo(12, -8); c.closePath();
+                paint(c, F('#9aa4b0'), INK, 1.7);
+                ell(c, 14.5, -14, 1.1, 1.1); paint(c, '#fde047', INK, 0.8);
+                c.beginPath(); c.moveTo(15, -10); c.lineTo(16, -8); c.lineTo(17, -10); c.closePath(); paint(c, '#ffffff', INK, 0.7);
+                // Rider
+                rr(c, -5, -24, 9, 9, 3); paint(c, F('#9a6a35'), INK, 1.6);
+                c.beginPath(); c.moveTo(-3, -30); c.lineTo(-9, -33); c.lineTo(-4, -27); c.closePath(); paint(c, F('#7cc242'), INK, 1.3);
+                ell(c, 0, -29, 5.2, 4.9); paint(c, F('#86cb47'), INK, 1.6);
+                ell(c, 2.2, -29.6, 1.2, 1.3); paint(c, '#fde047', INK, 0.8);
+                c.strokeStyle = INK; c.lineWidth = 3;
+                c.beginPath(); c.moveTo(4, -21); c.lineTo(12, -30); c.stroke();
+                c.strokeStyle = '#dfe4ea'; c.lineWidth = 1.4;
+                c.beginPath(); c.moveTo(4, -21); c.lineTo(12, -30); c.stroke();
+            } else if (en.type === 'ram') {
+                // Roofed battering ram on wheels
+                const thrust = Math.sin(t * 3 + ph) * 2.5;
+                c.fillStyle = 'rgba(0, 0, 0, 0.32)';
+                ell(c, 0, 2, 22, 6.5); c.fill();
+                rr(c, -3 + thrust, -15, 26, 6, 2.5); paint(c, F('#8a5527'), INK, 1.8);
+                rr(c, 19 + thrust, -17, 8, 10, 2.5); paint(c, F('#8f98a5'), INK, 1.8);
+                c.beginPath(); c.moveTo(-19, -8); c.lineTo(-15, -27); c.lineTo(11, -27); c.lineTo(17, -8); c.closePath();
+                paint(c, F('#a5713f'), INK, 2);
+                c.beginPath(); c.moveTo(-15, -27); c.lineTo(-11, -32); c.lineTo(8, -32); c.lineTo(11, -27); c.closePath();
+                paint(c, F('#c08a52'), INK, 1.8);
+                c.strokeStyle = '#6f4520'; c.lineWidth = 1.1;
+                c.beginPath();
+                for (let px = -11; px <= 9; px += 5) { c.moveTo(px, -26); c.lineTo(px - 1.5, -9); }
+                c.stroke();
+                rr(c, -19, -11, 36, 4, 1.5); paint(c, F('#6f4520'), INK, 1.5);
+                [-11, 9].forEach((wx) => {
+                    ell(c, wx, -3, 5.6, 5.6); paint(c, F('#5a3a1e'), INK, 1.9);
+                    ell(c, wx, -3, 1.8, 1.8); paint(c, '#c3cad3', INK, 0.9);
+                });
+            } else if (en.type === 'shaman') {
+                // Robed orc shaman with a glowing staff
+                c.fillStyle = 'rgba(0, 0, 0, 0.30)';
+                ell(c, 0, 1, 10, 4); c.fill();
+                c.translate(0, bob * 0.6);
+                c.strokeStyle = INK; c.lineWidth = 3.4;
+                c.beginPath(); c.moveTo(9, 0); c.lineTo(9, -30); c.stroke();
+                c.strokeStyle = '#8a5527'; c.lineWidth = 1.6;
+                c.beginPath(); c.moveTo(9, 0); c.lineTo(9, -30); c.stroke();
+                c.save();
+                c.shadowColor = '#4ade80'; c.shadowBlur = 8;
+                ell(c, 9, -32, 3.4 + swing * 0.5, 3.4 + swing * 0.5); paint(c, '#86efac', INK, 1.2);
+                c.restore();
+                c.beginPath(); c.moveTo(-8, 0); c.lineTo(-5.5, -19); c.lineTo(5.5, -19); c.lineTo(8, 0); c.closePath();
+                paint(c, F('#1f8a8a'), INK, 1.8);
+                c.fillStyle = '#f2c94c';
+                c.fillRect(-6.4, -9.5, 12.8, 2);
+                ell(c, 0.5, -24, 6.8, 6.4); paint(c, F('#5d9e37'), INK, 1.8);
+                c.beginPath(); c.moveTo(-5, -25); c.quadraticCurveTo(0.5, -33, 6, -25); c.quadraticCurveTo(0.5, -22, -5, -25); c.closePath();
+                paint(c, F('#f1ead9'), INK, 1.4);
+                ell(c, -1.4, -26.4, 1, 1.2); paint(c, INK);
+                ell(c, 2.8, -26.4, 1, 1.2); paint(c, INK);
+                c.beginPath(); c.moveTo(-6, -30); c.lineTo(-8.5, -36); c.lineTo(-3, -31); c.closePath(); paint(c, '#f1ead9', INK, 1.2);
+                c.beginPath(); c.moveTo(6.5, -30); c.lineTo(9, -36); c.lineTo(3.5, -31); c.closePath(); paint(c, '#f1ead9', INK, 1.2);
+            } else if (isOgre) {
                 c.fillStyle = 'rgba(0, 0, 0, 0.32)';
                 ell(c, 0, 1, 16, 6); c.fill();
-                rr(c, -9, -9 - Math.max(0, step) * 2, 7.5, 9, 2.6); paint(c, F('#9a4a34'), INK, 1.9);
-                rr(c, 1.5, -9 - Math.max(0, -step) * 2, 7.5, 9, 2.6); paint(c, F('#9a4a34'), INK, 1.9);
+                rr(c, -9, -9 - Math.max(0, step) * 2, 7.5, 9, 2.6); paint(c, F(OG.leg), INK, 1.9);
+                rr(c, 1.5, -9 - Math.max(0, -step) * 2, 7.5, 9, 2.6); paint(c, F(OG.leg), INK, 1.9);
                 c.translate(0, bob);
                 // Club arm (behind)
                 c.save();
@@ -3189,8 +3766,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 [[-2, -16], [2.2, -12.5], [-0.6, -8.5]].forEach(p => { ell(c, p[0], p[1], 1.2, 1.2); c.fill(); });
                 c.restore();
                 // Body
-                ell(c, 0, -19, 12.5, 13); paint(c, F('#bf5f45'), INK, 2);
-                ell(c, 2.5, -16.5, 7.2, 8); paint(c, F('#dc8d6f'));
+                ell(c, 0, -19, 12.5, 13); paint(c, F(OG.body), INK, 2);
+                ell(c, 2.5, -16.5, 7.2, 8); paint(c, F(OG.belly));
                 c.beginPath();
                 c.moveTo(-11.5, -11); c.quadraticCurveTo(0, -4.5, 11.5, -11); c.lineTo(9, -6); c.quadraticCurveTo(0, -1.5, -9, -6);
                 c.closePath();
@@ -3198,10 +3775,10 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 // Front arm
                 c.strokeStyle = INK; c.lineWidth = 7.4;
                 c.beginPath(); c.moveTo(8, -24); c.lineTo(12.5, -14); c.stroke();
-                c.strokeStyle = F('#bf5f45'); c.lineWidth = 4.6;
+                c.strokeStyle = F(OG.body); c.lineWidth = 4.6;
                 c.beginPath(); c.moveTo(8, -24); c.lineTo(12.5, -14); c.stroke();
                 // Head
-                ell(c, 2.5, -35, 8, 7.4); paint(c, F('#c9684d'), INK, 2);
+                ell(c, 2.5, -35, 8, 7.4); paint(c, F(OG.head), INK, 2);
                 c.beginPath(); c.moveTo(-3, -40.5); c.lineTo(-5.5, -46); c.lineTo(-0.5, -42); c.closePath(); paint(c, '#f1ead9', INK, 1.3);
                 c.beginPath(); c.moveTo(6, -41.5); c.lineTo(9.5, -46.5); c.lineTo(9.2, -40); c.closePath(); paint(c, '#f1ead9', INK, 1.3);
                 c.strokeStyle = INK; c.lineWidth = 1.8;
@@ -3209,6 +3786,16 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 ell(c, 6.2, -35.6, 1.6, 1.6); paint(c, '#fde047', INK, 1);
                 c.beginPath(); c.moveTo(3.4, -31); c.lineTo(9.4, -31.4); c.stroke();
                 c.beginPath(); c.moveTo(5.2, -31.2); c.lineTo(6.1, -34); c.lineTo(7, -31.3); c.closePath(); paint(c, '#ffffff', INK, 0.9);
+                if (isBoss) {
+                    c.beginPath(); c.arc(2.5, -36.5, 8.3, Math.PI * 1.0, Math.PI * 2.0); c.closePath();
+                    paint(c, F('#8f98a5'), INK, 1.6);
+                    c.beginPath(); c.moveTo(-5, -39); c.quadraticCurveTo(-11, -44, -8.5, -50); c.quadraticCurveTo(-5.5, -45, -1.5, -43); c.closePath();
+                    paint(c, '#f1ead9', INK, 1.2);
+                    c.beginPath(); c.moveTo(10, -39); c.quadraticCurveTo(16, -44, 13.5, -50); c.quadraticCurveTo(10.5, -45, 6.5, -43); c.closePath();
+                    paint(c, '#f1ead9', INK, 1.2);
+                    ell(c, 2.5, -44.5, 2, 2); paint(c, '#f2c94c', INK, 0.9);
+                    ell(c, -8.5, -26, 5.2, 4.4); paint(c, F('#8f98a5'), INK, 1.5);
+                }
             } else if (isOrc) {
                 c.fillStyle = 'rgba(0, 0, 0, 0.32)';
                 ell(c, 0, 1, 11.5, 4.6); c.fill();
@@ -3266,7 +3853,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 rr(c, -4.4, -6 - Math.max(0, step) * 1.6, 3.8, 6, 1.5); paint(c, F('#4d7f2a'), INK, 1.5);
                 rr(c, 0.8, -6 - Math.max(0, -step) * 1.6, 3.8, 6, 1.5); paint(c, F('#4d7f2a'), INK, 1.5);
                 c.translate(0, bob);
-                rr(c, -5.2, -14.5, 10.4, 10, 3.4); paint(c, F('#9a6a35'), INK, 1.7);
+                rr(c, -5.2, -14.5, 10.4, 10, 3.4); paint(c, F(isHunter ? '#6b3fa0' : '#9a6a35'), INK, 1.7);
                 c.fillStyle = '#6f4520';
                 c.fillRect(-4.6, -7.6, 9.2, 1.8);
                 // Ears + head
@@ -3277,8 +3864,19 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 ell(c, 4.3, -20.8, 0.7, 0.9); paint(c, INK);
                 c.strokeStyle = INK; c.lineWidth = 1.1;
                 c.beginPath(); c.moveTo(2.4, -16.8); c.quadraticCurveTo(4.6, -15.6, 6.6, -17.2); c.stroke();
+                if (isHunter) {
+                    c.beginPath(); c.arc(1, -21, 7, Math.PI * 1.0, Math.PI * 2.0); c.lineTo(8, -18.5); c.lineTo(-6, -18.5); c.closePath();
+                    paint(c, F('#6b3fa0'), INK, 1.5);
+                    c.strokeStyle = INK; c.lineWidth = 3.2;
+                    c.beginPath(); c.moveTo(8.5, -19); c.quadraticCurveTo(15, -11.5, 8.5, -4); c.stroke();
+                    c.strokeStyle = '#a66a2c'; c.lineWidth = 1.6;
+                    c.beginPath(); c.moveTo(8.5, -19); c.quadraticCurveTo(15, -11.5, 8.5, -4); c.stroke();
+                    c.strokeStyle = '#f1f5f9'; c.lineWidth = 0.9;
+                    c.beginPath(); c.moveTo(8.5, -19); c.lineTo(8.5, -4); c.stroke();
+                }
                 // Dagger arm
                 c.save();
+                if (isHunter) c.scale(0, 0);
                 c.translate(4.5, -10.5);
                 c.rotate(-0.5 + swing * 0.4);
                 c.strokeStyle = INK; c.lineWidth = 4.2;
@@ -3291,8 +3889,31 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             }
             c.restore();
 
-            const top = (isOgre ? 60 : (isOrc ? 47 : 36)) * scale;
-            drawHealthBar(c, x, y - top, (isOgre ? 34 : 24) * scale, en.hp / en.maxHp, '#ef4444', scale);
+            const tops = { goblin: 36, hunter: 38, orc: 47, shaman: 48, wolf: 46, ram: 44, ogre: 60, warlord: 100 };
+            const top = (tops[en.type] || 40) * scale;
+            const barW = (isBoss ? 58 : ((isOgre || en.type === 'ram') ? 34 : 24)) * scale;
+
+            if (en.burn > 0) {
+                // Fire Arrows: flickering flame
+                const fl = Math.sin(t * 22 + ph);
+                const fy = y - top * 0.55;
+                c.beginPath();
+                c.moveTo(x - 5 * scale, fy + 6 * scale);
+                c.quadraticCurveTo(x - 7 * scale, fy - 3 * scale, x + fl * 1.5 * scale, fy - (11 + fl * 2) * scale);
+                c.quadraticCurveTo(x + 7 * scale, fy - 3 * scale, x + 5 * scale, fy + 6 * scale);
+                c.closePath();
+                paint(c, '#fb923c', INK, 1.3 * scale);
+                ell(c, x, fy + 2 * scale, 2.4 * scale, 3.6 * scale); paint(c, '#fde047');
+            }
+            if (en.healPulse > 0) {
+                const hp = 1 - en.healPulse / 0.6;
+                c.save();
+                c.globalAlpha = Math.max(0, 1 - hp);
+                ell(c, x, y - 4 * scale, (14 + hp * 44) * scale, (8 + hp * 24) * scale);
+                paint(c, null, '#4ade80', 3 * scale);
+                c.restore();
+            }
+            drawHealthBar(c, x, y - top, barW, en.hp / en.maxHp, isBoss ? '#c084fc' : '#ef4444', scale);
         }
 
         function drawHolographicDeploymentGhost(c, geom, dep) {
@@ -3412,11 +4033,56 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 c.restore();
             }
 
+            // Enemy hunter bolts
+            for (let i = 0; i < game.bolts.length; i++) {
+                const b = game.bolts[i];
+                const hx = b.x0 + (b.x1 - b.x0) * b.t;
+                const hy = b.y0 + (b.y1 - b.y0) * b.t - Math.sin(b.t * Math.PI) * 10 * s;
+                const tt = Math.max(0, b.t - 0.22);
+                const tx = b.x0 + (b.x1 - b.x0) * tt;
+                const ty = b.y0 + (b.y1 - b.y0) * tt - Math.sin(tt * Math.PI) * 10 * s;
+                c.strokeStyle = INK; c.lineWidth = 3.2 * s;
+                c.beginPath(); c.moveTo(tx, ty); c.lineTo(hx, hy); c.stroke();
+                c.strokeStyle = '#c084fc'; c.lineWidth = 1.5 * s;
+                c.beginPath(); c.moveTo(tx, ty); c.lineTo(hx, hy); c.stroke();
+            }
+
             for (let i = 0; i < game.particles.length; i++) {
                 const p = game.particles[i];
                 ell(c, p.x, p.y, p.size * s, p.size * s);
                 paint(c, p.color, 'rgba(38, 35, 53, 0.55)', 0.9 * s);
             }
+            c.restore();
+        }
+
+        // Pulsing danger markers on the roads the next wave will use
+        function drawWaveWarnings(c, g) {
+            if (!game.intermission || !game.waveInfo) return;
+            const s = g.scale;
+            const t = game.animTime;
+            const boss = game.waveInfo.theme === 'boss';
+            c.save();
+            c.lineJoin = 'round';
+            game.waveInfo.lanes.forEach((li) => {
+                const p = laneDistToXY(g, li, 0.7, 0);
+                const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+                const r = (boss ? 17 : 13) * s * (1 + 0.12 * pulse);
+                c.globalAlpha = 0.25 + 0.2 * pulse;
+                ell(c, p.x, p.y, r * 2, r * 1.15);
+                paint(c, '#ef4444');
+                c.globalAlpha = 1;
+                const by = p.y - 26 * s - pulse * 4 * s;
+                c.beginPath();
+                c.moveTo(p.x, by - r * 1.25);
+                c.lineTo(p.x + r * 1.15, by + r * 0.8);
+                c.lineTo(p.x - r * 1.15, by + r * 0.8);
+                c.closePath();
+                paint(c, boss ? '#7c3aed' : '#ef4444', INK, 2.4 * s);
+                c.font = `900 ${Math.round(r * 1.25)}px "Trebuchet MS", sans-serif`;
+                c.textAlign = 'center';
+                c.fillStyle = '#ffffff';
+                c.fillText('!', p.x, by + r * 0.55);
+            });
             c.restore();
         }
 
@@ -3442,7 +4108,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             if (game.waveBannerTimer > 0) {
                 const msg = game.wave === 1 && game.enemies.length === 0
                     ? 'PICK A ROAD & DEPLOY YOUR DEFENDERS!'
-                    : `WAVE ${game.wave} INCOMING!`;
+                    : `WAVE ${game.wave}: ${(game.waveInfo && game.waveInfo.name) || 'INCOMING'}!`;
                 let size = 26 * s;
                 c.font = `900 ${Math.round(size)}px ${fontStack}`;
                 const maxW = geom.w * 0.9;
@@ -3451,7 +4117,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     size *= maxW / tw;
                     c.font = `900 ${Math.round(size)}px ${fontStack}`;
                 }
-                const by = Math.max(geom.h * 0.17, geom.cy - 172 * s);
+                const by = Math.max(geom.h * 0.17, geom.cy - 172 * s, hudInsets.top + size * 0.9);
                 c.globalAlpha = Math.min(1, game.waveBannerTimer * 2.5);
                 c.textAlign = 'center';
                 c.lineWidth = size * 0.28;
@@ -3518,6 +4184,13 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 return;
             }
             if (game.paused || game.gameOver || game.victory) return;
+            if (game.perkChoices) {
+                if (key === '1' || key === '2' || key === '3') choosePerk(Number(key) - 1);
+                return;
+            }
+            if (key === 'e') { useAbility('volley'); return; }
+            if (key === 'r') { useAbility('rally'); return; }
+            if (key === 'enter' || key === 'n') { startWaveNow(); return; }
 
             if (key === '1' || key === 'q') selectLane(0);
             else if (key === '2' || key === 'w') selectLane(1);
@@ -3667,6 +4340,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             document.body.classList.toggle('short', land && vh < 520);
             document.body.classList.toggle('wide', land && vw >= 1100);
             hudInsets.side = 0;
+            const topHudEl = document.getElementById('topHud');
+            hudInsets.top = topHudEl ? topHudEl.getBoundingClientRect().bottom * dpr : 0;
             if (land) {
                 const a = document.getElementById('dockArcher');
                 const b = document.getElementById('dockSword');
