@@ -62,7 +62,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
 4. ENEMY ARCHETYPES, WAVES & GOLD ECONOMY
 =========================================
-* Starting Gold: 200g | Passive Castle Income: +3g/sec | Wave Clear Bonus: +60g + Castle Heal
+* Starting Gold: 200g | Passive Castle Income: +7g/sec | Wave Clear Bonus: +100g + Castle Heal
 * Enemy Types (ENDLESS waves: no final wave, every wave is harder than the last):
   1) GOBLIN SCOUT (Bounty: +25g): Fast green runner, low HP, no arrow resistance.
   2) SHIELD ORC (Bounty: +45g): Armored warrior carrying a heavy iron shield that blocks
@@ -211,6 +211,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         .upgrade-btn, .upgrade-btn span { white-space: nowrap; }
         @media (max-width: 420px) { .upgrade-btn { font-size: 11px; padding: 4px 7px; gap: 4px; } }
         .lbl-short { display: none; }
+        @media (max-width: 520px) {
+            body:not(.land) .lbl-full { display: none; }
+            body:not(.land) .lbl-short { display: inline; }
+            body:not(.land) #goldText { font-size: 15px; }
+        }
 
         /* ---------- Landscape: HUD sits in the open meadow between the roads ---------- */
         body.land #topHudRow { justify-content: center; flex-wrap: nowrap; }
@@ -359,6 +364,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 <button id="muteBtn" onclick="toggleAudioMute()" title="Toggle Sound Effects"
                         class="hud-pill px-2.5 py-1.5 text-white hover:text-amber-300 active:translate-y-0.5 text-xs sm:text-sm font-cartoon-sm">
                     <span id="muteLabel" class="lbl-full">SFX ON</span><span id="muteIcon" class="lbl-short">&#128266;</span>
+                </button>
+
+                <!-- Game speed -->
+                <button id="speedBtn" onclick="toggleGameSpeed()" title="Game speed [F]"
+                        class="hud-pill px-2.5 py-1.5 text-amber-300 hover:text-white active:translate-y-0.5 text-xs sm:text-sm font-cartoon-sm">
+                    <span id="speedLabel">1x</span>
                 </button>
 
                 <!-- Reset Battle Button -->
@@ -823,9 +834,9 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 type: 'archer',
                 name: 'ARCHER',
                 cost: 50,
-                deployTime: 1.5,
+                deployTime: 0.7,
                 damage: 16,
-                fireInterval: 0.85,
+                fireInterval: 0.7,
                 maxPerTower: 3,
                 maxAmmo: 20,
                 rangeDist: 0.62
@@ -834,18 +845,19 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 type: 'swordsman',
                 name: 'SWORDSMAN',
                 cost: 75,
-                deployTime: 3.0,
+                deployTime: 1.1,
                 hp: 135,
                 maxHp: 135,
                 damage: 22,
-                attackInterval: 0.85,
-                speed: 0.20,
+                attackInterval: 0.7,
+                speed: 0.34,
                 guardDist: 0.62
             }
         };
 
         // Gold-bought upgrades: every level strengthens all current and future units of that type
         const MAX_UNIT_LEVEL = 25;
+        const ENEMY_SPEED_MULT = 1.35;   // global tempo knob for the whole horde
         const UPGRADE_COSTS = [200, 400, 700, 1100, 1700, 2500, 3500, 4800, 6400];
         const BASE_STATS = {
             archer: { damage: UNITS.archer.damage, fireInterval: UNITS.archer.fireInterval, maxAmmo: UNITS.archer.maxAmmo },
@@ -1052,6 +1064,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             waveTime: 0,
             waveDamage: 0,
             endless: true,
+            timeScale: 1,
             bolts: [],
             selectedLane: 0, // 0: NW, 1: NE, 2: SW, 3: SE
             deployment: null, // { type, lane, remaining, total } - strict one-at-a-time lock
@@ -1217,8 +1230,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             fire:   { name: 'Fire Arrows',    max: 3,  icon: '\u{1F525}', desc: 'Arrows set enemies ablaze: +4 damage per second for 3s.' },
             pierce: { name: 'Bodkin Points',  max: 2,  icon: '\u{1F3AF}', desc: 'Arrows ignore half of enemy armor and shields.' },
             medics: { name: 'Field Medics',   max: 3,  icon: '\u{271A}',  desc: 'Swordsmen regenerate 4 HP per second.' },
-            taxes:  { name: 'Tax Collectors', max: 4,  icon: '\u{1F4B0}', desc: '+2 gold per second.' },
-            bounty: { name: 'Bounty Hunters', max: 3,  icon: '\u{2620}',  desc: '+20% gold from every kill.' },
+            taxes:  { name: 'Tax Collectors', max: 4,  icon: '\u{1F4B0}', desc: '+3 gold per second.' },
+            bounty: { name: 'Bounty Hunters', max: 3,  icon: '\u{2620}',  desc: '+25% gold from every kill.' },
             masons: { name: 'Master Masons',  max: 99, icon: '\u{1F9F1}', desc: 'Repair 250 castle HP and add +100 max HP.' },
             quiver: { name: 'Deep Quivers',   max: 3,  icon: '\u{1F3F9}', desc: 'Archers carry +10 arrows.' },
             muster: { name: 'Quick Muster',   max: 3,  icon: '\u{26A1}',  desc: 'Units deploy 20% faster.' },
@@ -1344,8 +1357,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
         function startWaveNow() {
             if (game.paused || game.gameOver || game.victory || game.perkChoices) return;
-            if (!game.intermission || game.spawnTimer <= 1) return;
-            const bonus = Math.round(game.spawnTimer * 4);
+            if (!game.intermission || game.spawnTimer <= 0.8) return;
+            const bonus = Math.round(game.spawnTimer * 10);
             game.gold += bonus;
             game.spawnTimer = 0.2;
             const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
@@ -1374,7 +1387,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             game.castleHp = Math.min(game.maxCastleHp, game.castleHp + 60);
             game.waveQueue = buildWaveQueue(game.wave);
             game.intermission = true;
-            game.spawnTimer = 12;
+            game.spawnTimer = 5;
             game.waveTime = 0;
             game.waveDamage = 0;
         }
@@ -1382,8 +1395,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         function onWaveCleared(geom) {
             const cleared = game.wave;
             const rw = waveRewards(cleared);
-            let total = 60;
-            const lines = [`WAVE ${cleared} CLEARED! +60g`];
+            let total = 100;
+            const lines = [`WAVE ${cleared} CLEARED! +100g`];
             if (game.waveDamage <= 0) { total += rw.flawless; lines.push(`FLAWLESS DEFENSE +${rw.flawless}g`); }
             if (game.waveTime <= game.waveInfo.par) { total += rw.swift; lines.push(`SWIFT VICTORY +${rw.swift}g`); }
             game.gold += total;
@@ -1441,7 +1454,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             }
             const T = WAVE_THEMES[theme];
             const eff = Math.min(waveNum, 40) + Math.max(0, waveNum - 40) * 0.35;
-            const baseDelay = Math.max(0.4, 1.7 - waveNum * 0.045);
+            const baseDelay = Math.max(0.28, 1.15 - waveNum * 0.03);
             const focus = Math.floor(Math.random() * 4);
             let lanes = [0, 1, 2, 3];
             if (T.lanes === 1) lanes = [focus];
@@ -1460,7 +1473,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
             const queue = [];
             const eliteChance = waveNum < 8 ? 0 : Math.min(0.35, 0.06 + (waveNum - 8) * 0.012);
-            const count = Math.max(5, Math.round((8 + eff * 4.4) * T.count));
+            const count = Math.max(5, Math.round((12 + eff * 6.2) * T.count));
             for (let i = 0; i < count; i++) {
                 const type = T.roll ? T.roll(waveNum, Math.random()) : mixedType();
                 let lane;
@@ -1482,7 +1495,14 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     queue.splice(Math.min(queue.length, Math.floor(queue.length * 0.3) + k * 4), 0, { type: 'warlord', lane: focus, delay: 2.5 });
                 }
             }
-            let par = 30 + (theme === 'boss' ? 30 : 0);
+            // Keep waves snappy: however many enemies there are, they all arrive within a capped window
+            const spawnWindow = Math.min(42, 22 + waveNum * 0.6);
+            const spawnTotal = queue.reduce((a, q) => a + q.delay, 0);
+            if (spawnTotal > spawnWindow) {
+                const k = spawnWindow / spawnTotal;
+                queue.forEach(q => { q.delay = Math.max(0.07, q.delay * k); });
+            }
+            let par = 26 + (theme === 'boss' ? 20 : 0);
             queue.forEach(q => { par += q.delay; });
             return { queue, info: { theme, name: T.name, lanes: lanes.slice(), par: Math.round(par) } };
         }
@@ -1519,7 +1539,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             game.particles = [];
             game.floatingTexts = [];
             game.waveQueue = buildWaveQueue(1);
-            game.spawnTimer = 8.0;           // grace period before the first enemy (START NOW skips it)
+            game.spawnTimer = 4.0;           // grace period before the first enemy (START NOW skips it)
             game.waveBannerTimer = 2.8;
             game.gameOver = false;
             game.victory = false;
@@ -1730,7 +1750,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     game.waveQueue = [];
                 }
 
-                game.spawnTimer = game.intermission ? 6.0 : 2.0;
+                game.spawnTimer = game.intermission ? 4.0 : 2.0;
                 if (Array.isArray(data.perkChoices) && data.perkChoices.length > 0 && data.perkChoices.every(id => PERKS[id])) {
                     game.perkChoices = data.perkChoices.slice(0, 3);
                     showPerkModal();
@@ -1867,7 +1887,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
 
             // 1. Passive Castle Gold Income (+4g / sec)
-            game.passiveGoldAccum += (3.0 + 2 * perk('taxes')) * dt;
+            game.passiveGoldAccum += (7.0 + 3 * perk('taxes')) * dt;
             if (game.passiveGoldAccum >= 1.0) {
                 const whole = Math.floor(game.passiveGoldAccum);
                 game.gold += whole;
@@ -1897,7 +1917,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     const elite = Boolean(nextSpawn.elite);
                     const wv = game.wave - 1;
                     // Past wave 40 the horde toughens faster still, so no build can coast forever
-                    const waveHpScale = (1 + wv * 0.18 + wv * wv * 0.009) * (1 + Math.max(0, wv - 39) * 0.04);
+                    const waveHpScale = (1 + wv * 0.24 + wv * wv * 0.014) * (1 + Math.max(0, wv - 39) * 0.04);
                     const waveDmgScale = 1 + wv * 0.045;
                     const scaledHp = Math.round(cfg.hp * waveHpScale * (elite ? 1.9 : 1));
                     const lateral = (Math.random() - 0.5) * 18 * geom.scale;
@@ -1975,7 +1995,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                                 targetY: targetPt.y,
                                 targetEnemy: target,
                                 progress: 0,
-                                speed: 2.35,
+                                speed: 3.0,
                                 arcHeight: (36 + bestDist * 34) * geom.scale,
                                 damage: UNITS.archer.damage
                             });
@@ -2095,7 +2115,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
                 if (e.hp <= 0) {
                     const pt = laneDistToXY(geom, e.lane, e.dist, e.lateral);
-                    const bounty = Math.round(e.bounty * (1 + 0.2 * perk('bounty')));
+                    const bounty = Math.round(e.bounty * 1.6 * (1 + 0.25 * perk('bounty')));
                     game.gold += bounty;
                     game.totalKills += 1;
                     sfx.playGold();
@@ -2167,7 +2187,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         addFloatingText(`-${e.damage}`, pt.x, pt.y - 22, '#fb923c', 14);
                     }
                 } else if (e.dist > 0.08) {
-                    e.dist = Math.max(0.08, e.dist - e.speed * dt);
+                    e.dist = Math.max(0.08, e.dist - e.speed * ENEMY_SPEED_MULT * dt);
                 } else {
                     // Enemy has reached the Castle gate!
                     if (e.cooldown <= 0) {
@@ -2353,9 +2373,9 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             }
             if (chipTxt && chipTxt.dataset.h !== chipHtml) { chipTxt.dataset.h = chipHtml; chipTxt.innerHTML = chipHtml; }
             if (startBtn) {
-                const showStart = game.intermission && game.spawnTimer > 1;
+                const showStart = game.intermission && game.spawnTimer > 0.8;
                 startBtn.style.display = showStart ? '' : 'none';
-                if (showStart) startBtn.textContent = `START NOW +${Math.round(game.spawnTimer * 4)}g`;
+                if (showStart) startBtn.textContent = `START NOW +${Math.round(game.spawnTimer * 10)}g`;
             }
             const strip = document.getElementById('perkStrip');
             if (strip) {
@@ -4240,6 +4260,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 if (key === '1' || key === '2' || key === '3') choosePerk(Number(key) - 1);
                 return;
             }
+            if (key === 'f') { toggleGameSpeed(); return; }
             if (key === 'e') { useAbility('volley'); return; }
             if (key === 'r') { useAbility('rally'); return; }
             if (key === 'enter' || key === 'n') { startWaveNow(); return; }
@@ -4422,11 +4443,18 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         let lastFrameTime = performance.now();
         let engineBooted = false;
 
+        function toggleGameSpeed() {
+            game.timeScale = game.timeScale >= 3 ? 1 : game.timeScale + 1;
+            const el = document.getElementById('speedLabel');
+            if (el) el.textContent = `${game.timeScale}x`;
+            try { localStorage.setItem('bastion_speed_v1', String(game.timeScale)); } catch (e) {}
+        }
+
         function gameLoop(now) {
             const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
             lastFrameTime = now;
 
-            updateSimulation(dt);
+            for (let i = 0; i < (game.timeScale || 1); i++) updateSimulation(dt);
             renderBattlefield(ctx, canvas.width, canvas.height, false);
 
             requestAnimationFrame(gameLoop);
@@ -4440,6 +4468,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             generateScenery();
             initFreshGameState();
             loadPersistedStateOnce();
+            try {
+                const sp = Math.floor(Number(localStorage.getItem('bastion_speed_v1')) || 1);
+                game.timeScale = Math.max(1, Math.min(3, sp));
+                const el = document.getElementById('speedLabel');
+                if (el) el.textContent = `${game.timeScale}x`;
+            } catch (e) {}
             renderBattlefield(ctx, canvas.width, canvas.height, false);
 
             lastFrameTime = performance.now();
