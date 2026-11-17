@@ -44,7 +44,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
     NEVER fire across lanes. In-flight arrows are also strictly bound to `arrow.lane`.
   * Selecting a lane displays an animated dashed cyan/gold firing corridor from its corner
     tower down its connected bridge and road up to maximum archer range.
-* SWORDSMAN (Cost: 75g | Deploy Time: 3.0s | HP: 135 | Melee Damage: 22):
+* SWORDSMAN (Cost: 75g (+20% per upgrade level) | Max 3 per road, +1 every 5 levels | HP: 135 | Melee Damage: 22):
   * Spawns at the castle gate of the selected lane, marches across the bridge and out along
     the whole road to a forward post near its far end (`dist = 0.86`), charges any enemy on
     that lane, blocks it in melee, and shatters shields on contact (`enemy.arrowResist = 0`).
@@ -62,7 +62,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
 4. ENEMY ARCHETYPES, WAVES & GOLD ECONOMY
 =========================================
-* Starting Gold: 200g | Passive Castle Income: +4g/sec | Wave Clear Bonus: +75g + Castle Heal
+* Starting Gold: 200g | Passive Castle Income: +3g/sec | Wave Clear Bonus: +60g + Castle Heal
 * Enemy Types (ENDLESS waves: no final wave, every wave is harder than the last):
   1) GOBLIN SCOUT (Bounty: +25g): Fast green runner, low HP, no arrow resistance.
   2) SHIELD ORC (Bounty: +45g): Armored warrior carrying a heavy iron shield that blocks
@@ -208,6 +208,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         .upgrade-btn:active:not(.locked-upg) { transform: translateY(2px); }
         .upgrade-btn.locked-upg { filter: saturate(0.35) brightness(0.72); cursor: not-allowed; }
         .upgrade-btn .upg-arrow { font-size: 14px; }
+        .upgrade-btn, .upgrade-btn span { white-space: nowrap; }
+        @media (max-width: 420px) { .upgrade-btn { font-size: 11px; padding: 4px 7px; gap: 4px; } }
         .lbl-short { display: none; }
 
         /* ---------- Landscape: HUD sits in the open meadow between the roads ---------- */
@@ -410,7 +412,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     <span class="card-key hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[Z]</span>
                 </div>
                 <div class="card-cost font-cartoon text-amber-300 text-xs sm:text-base">
-                    Cost: 50g
+                    Cost: <span id="archerCostText">50</span>g
                 </div>
                 <div class="card-extra font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
                     ⏱ 1.5s • Lane-Locked
@@ -472,7 +474,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     <span class="card-key hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[X]</span>
                 </div>
                 <div class="card-cost font-cartoon text-amber-300 text-xs sm:text-base">
-                    Cost: 75g
+                    Cost: <span id="swordCostText">75</span>g
                 </div>
                 <div class="card-extra font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
                     ⏱ 3.0s • Breaks Shields
@@ -826,7 +828,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 fireInterval: 0.85,
                 maxPerTower: 3,
                 maxAmmo: 20,
-                rangeDist: 0.90
+                rangeDist: 0.62
             },
             swordsman: {
                 type: 'swordsman',
@@ -838,13 +840,13 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 damage: 22,
                 attackInterval: 0.85,
                 speed: 0.20,
-                guardDist: 0.86
+                guardDist: 0.62
             }
         };
 
         // Gold-bought upgrades: every level strengthens all current and future units of that type
         const MAX_UNIT_LEVEL = 25;
-        const UPGRADE_COSTS = [150, 300, 500, 800, 1200, 1800, 2600, 3600, 5000];
+        const UPGRADE_COSTS = [200, 400, 700, 1100, 1700, 2500, 3500, 4800, 6400];
         const BASE_STATS = {
             archer: { damage: UNITS.archer.damage, fireInterval: UNITS.archer.fireInterval, maxAmmo: UNITS.archer.maxAmmo },
             swordsman: { damage: UNITS.swordsman.damage, hp: UNITS.swordsman.hp }
@@ -854,18 +856,27 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         function applyUnitLevels() {
             const al = game.levels.archer - 1;
             const sl = game.levels.swordsman - 1;
-            UNITS.archer.damage = Math.round(BASE_STATS.archer.damage * (1 + 0.35 * al));
+            UNITS.archer.damage = Math.round(BASE_STATS.archer.damage * (1 + 0.28 * al));
             UNITS.archer.fireInterval = BASE_STATS.archer.fireInterval * Math.pow(0.94, al);
+            UNITS.archer.rangeDist = Math.min(0.9, 0.62 + 0.016 * al);
             UNITS.archer.maxAmmo = BASE_STATS.archer.maxAmmo + 6 * al + 10 * perk('quiver');
-            UNITS.swordsman.damage = Math.round(BASE_STATS.swordsman.damage * (1 + 0.35 * sl));
-            UNITS.swordsman.hp = UNITS.swordsman.maxHp = Math.round(BASE_STATS.swordsman.hp * (1 + 0.4 * sl));
+            UNITS.swordsman.damage = Math.round(BASE_STATS.swordsman.damage * (1 + 0.28 * sl));
+            UNITS.swordsman.hp = UNITS.swordsman.maxHp = Math.round(BASE_STATS.swordsman.hp * (1 + 0.32 * sl));
         }
+
+        // Units get pricier as their type is upgraded; swordsmen are capped per road
+        function unitCost(type) {
+            const lv = game.levels ? game.levels[type] : 1;
+            return Math.round((UNITS[type].cost * (1 + 0.2 * (lv - 1))) / 5) * 5;
+        }
+        function swordCap() { return Math.min(6, 3 + Math.floor((game.levels.swordsman - 1) / 5)); }
+        function laneSwordCount(l) { return game.swordsmen.filter(s => s.lane === l).length; }
 
         function upgradeCost(unitType) {
             const lv = game.levels[unitType];
             if (lv >= MAX_UNIT_LEVEL) return null;
-            // Fixed prices for the first levels, then +1500g per level so late gold always has a use
-            return lv <= UPGRADE_COSTS.length ? UPGRADE_COSTS[lv - 1] : 5000 + (lv - UPGRADE_COSTS.length) * 1500;
+            // Fixed prices for the first levels, then +2000g per level so late gold always has a use
+            return lv <= UPGRADE_COSTS.length ? UPGRADE_COSTS[lv - 1] : 6400 + (lv - UPGRADE_COSTS.length) * 2000;
         }
 
         function upgradeUnit(unitType) {
@@ -1310,8 +1321,13 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 sfx.playBow();
                 addFloatingText('ARROW VOLLEY!', lane.ringX, lane.ringY - 25, '#c4b5fd', 17);
             } else if (id === 'rally') {
-                completeActiveDeployment({ type: 'swordsman', lane: laneIdx });
-                completeActiveDeployment({ type: 'swordsman', lane: laneIdx });
+                const room = swordCap() - laneSwordCount(laneIdx);
+                if (room <= 0) {
+                    sfx.playError();
+                    addFloatingText('ROAD FULL!', lane.ringX, lane.ringY - 25, '#f87171', 14);
+                    return;
+                }
+                for (let k = 0; k < Math.min(2, room); k++) completeActiveDeployment({ type: 'swordsman', lane: laneIdx });
                 addFloatingText('RALLY!', lane.ringX, lane.ringY - 44, '#c4b5fd', 17);
             }
             game.cooldowns[id] = abilityCooldown(id);
@@ -1363,8 +1379,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         function onWaveCleared(geom) {
             const cleared = game.wave;
             const rw = waveRewards(cleared);
-            let total = 75;
-            const lines = [`WAVE ${cleared} CLEARED! +75g`];
+            let total = 60;
+            const lines = [`WAVE ${cleared} CLEARED! +60g`];
             if (game.waveDamage <= 0) { total += rw.flawless; lines.push(`FLAWLESS DEFENSE +${rw.flawless}g`); }
             if (game.waveTime <= game.waveInfo.par) { total += rw.swift; lines.push(`SWIFT VICTORY +${rw.swift}g`); }
             game.gold += total;
@@ -1422,7 +1438,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             }
             const T = WAVE_THEMES[theme];
             const eff = Math.min(waveNum, 40) + Math.max(0, waveNum - 40) * 0.35;
-            const baseDelay = Math.max(0.55, 2.1 - waveNum * 0.06);
+            const baseDelay = Math.max(0.4, 1.7 - waveNum * 0.045);
             const focus = Math.floor(Math.random() * 4);
             let lanes = [0, 1, 2, 3];
             if (T.lanes === 1) lanes = [focus];
@@ -1440,7 +1456,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             };
 
             const queue = [];
-            const count = Math.max(4, Math.round((5 + eff * 3) * T.count));
+            const eliteChance = waveNum < 8 ? 0 : Math.min(0.35, 0.06 + (waveNum - 8) * 0.012);
+            const count = Math.max(5, Math.round((8 + eff * 4.4) * T.count));
             for (let i = 0; i < count; i++) {
                 const type = T.roll ? T.roll(waveNum, Math.random()) : mixedType();
                 let lane;
@@ -1448,7 +1465,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 else if (T.lanes === 2) lane = lanes[i % 2];
                 else lane = (i + waveNum) % 4;
                 const delay = i === 0 ? 0.8 : (baseDelay + Math.random() * 0.6) * T.pace;
-                queue.push({ type, lane, delay });
+                queue.push({ type, lane, delay, elite: Math.random() < eliteChance && type !== 'goblin' && type !== 'ram' });
             }
             if (theme === 'rams') {
                 const perLane = 1 + Math.floor(waveNum / 10);
@@ -1580,6 +1597,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             damage: Number(e.damage) || 0,
                             arrowResist: Number(e.arrowResist) || 0,
                             hasShield: Boolean(e.hasShield),
+                            elite: Boolean(e.elite),
+                            bounty: Number(e.bounty) || 0,
                             lateral: Number(e.lateral) || 0
                         }))
                         : [],
@@ -1674,7 +1693,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             speed: cfg.speed,
                             damage: Math.max(1, Math.min(2000, Number(e.damage) || cfg.damage)),
                             attackInterval: cfg.attackInterval,
-                            bounty: cfg.bounty,
+                            bounty: Math.max(1, Math.min(2000, Number(e.bounty) || cfg.bounty)),
+                            elite: Boolean(e.elite),
                             arrowResist: Number.isFinite(Number(e.arrowResist)) ? Number(e.arrowResist) : cfg.arrowResist,
                             hasShield: Boolean(e.hasShield),
                             radius: cfg.radius,
@@ -1757,14 +1777,20 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             }
 
             // 3. Check Gold treasury
-            if (game.gold < cfg.cost) {
+            if (unitType === 'swordsman' && laneSwordCount(laneIdx) >= swordCap()) {
                 sfx.playError();
-                addFloatingText(`NEED ${cfg.cost} GOLD!`, lane.ringX, lane.ringY - 25, '#f87171', 15);
+                addFloatingText(`${lane.code} ROAD FULL (${swordCap()}/${swordCap()})!`, lane.ringX, lane.ringY - 25, '#f87171', 14);
+                return;
+            }
+            const price = unitCost(unitType);
+            if (game.gold < price) {
+                sfx.playError();
+                addFloatingText(`NEED ${price} GOLD!`, lane.ringX, lane.ringY - 25, '#f87171', 15);
                 return;
             }
 
             // Deduct cost & start one-at-a-time holographic deployment countdown
-            game.gold -= cfg.cost;
+            game.gold -= price;
             game.deployment = {
                 type: unitType,
                 lane: laneIdx,
@@ -1775,7 +1801,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             sfx.playDeploy();
             const targetX = unitType === 'archer' ? lane.towerX : lane.ringX;
             const targetY = unitType === 'archer' ? lane.towerY - 22 : lane.ringY - 22;
-            addFloatingText(`-${cfg.cost}g`, targetX, targetY, '#fde047', 15);
+            addFloatingText(`-${price}g`, targetX, targetY, '#fde047', 15);
             saveGameState();
             updateHudDom();
         }
@@ -1798,11 +1824,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 }
             } else if (dep.type === 'swordsman') {
                 const sameLaneCount = game.swordsmen.filter(s => s.lane === laneIdx).length;
+                if (sameLaneCount >= swordCap()) return;
                 const lateral = ((sameLaneCount % 3) - 1) * 11 * geom.scale;
                 game.swordsmen.push({
                     lane: laneIdx,
                     dist: 0.14,
-                    guardDist: UNITS.swordsman.guardDist - (sameLaneCount % 4) * 0.045,
+                    guardDist: UNITS.swordsman.guardDist - (sameLaneCount % 6) * 0.05,
                     hp: UNITS.swordsman.hp,
                     maxHp: UNITS.swordsman.maxHp,
                     cooldown: 0.1,
@@ -1836,7 +1863,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
 
             // 1. Passive Castle Gold Income (+4g / sec)
-            game.passiveGoldAccum += (4.0 + 2 * perk('taxes')) * dt;
+            game.passiveGoldAccum += (3.0 + 2 * perk('taxes')) * dt;
             if (game.passiveGoldAccum >= 1.0) {
                 const whole = Math.floor(game.passiveGoldAccum);
                 game.gold += whole;
@@ -1863,11 +1890,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         game.waveBannerTimer = 2.6;
                     }
                     const cfg = ENEMY_TYPES[nextSpawn.type] || ENEMY_TYPES.goblin;
+                    const elite = Boolean(nextSpawn.elite);
                     const wv = game.wave - 1;
                     // Past wave 40 the horde toughens faster still, so no build can coast forever
-                    const waveHpScale = (1 + wv * 0.14 + wv * wv * 0.004) * (1 + Math.max(0, wv - 39) * 0.04);
-                    const waveDmgScale = 1 + wv * 0.03;
-                    const scaledHp = Math.round(cfg.hp * waveHpScale);
+                    const waveHpScale = (1 + wv * 0.18 + wv * wv * 0.009) * (1 + Math.max(0, wv - 39) * 0.04);
+                    const waveDmgScale = 1 + wv * 0.045;
+                    const scaledHp = Math.round(cfg.hp * waveHpScale * (elite ? 1.9 : 1));
                     const lateral = (Math.random() - 0.5) * 18 * geom.scale;
 
                     game.enemies.push({
@@ -1880,7 +1908,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         speed: cfg.speed,
                         damage: Math.round(cfg.damage * waveDmgScale),
                         attackInterval: cfg.attackInterval,
-                        bounty: cfg.bounty,
+                        bounty: Math.round(cfg.bounty * (elite ? 2 : 1)),
+                        elite,
                         arrowResist: cfg.arrowResist,
                         hasShield: Boolean(cfg.hasShield),
                         radius: cfg.radius,
@@ -2035,10 +2064,10 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             addFloatingText('SHIELD BROKEN!', pt.x, pt.y - 42, '#38bdf8', 14);
                         }
                     }
-                } else if (laneEnemy) {
-                    // Charge the nearest enemy anywhere on this road (even one that slipped past)
+                } else if (laneEnemy && laneEnemy.dist < (sw.guardDist || UNITS.swordsman.guardDist) + 0.14) {
+                    // Charge enemies that come within reach of the post (including ones that slipped past)
                     const dir = Math.sign(laneEnemy.dist - sw.dist);
-                    sw.dist = Math.max(0.1, Math.min(0.93, sw.dist + dir * UNITS.swordsman.speed * dt));
+                    sw.dist = Math.max(0.1, Math.min(0.9, sw.dist + dir * UNITS.swordsman.speed * dt));
                 } else {
                     // March out to a forward post near the far end of the road
                     const targetDist = sw.guardDist || UNITS.swordsman.guardDist;
@@ -2268,10 +2297,14 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const selLaneSwords = game.swordsmen.filter(s => s.lane === game.selectedLane).length;
 
             if (archerCountBadge) archerCountBadge.textContent = `${selTowerArchers}/3`;
-            if (swordsmanCountBadge) swordsmanCountBadge.textContent = `${selLaneSwords}`;
+            if (swordsmanCountBadge) swordsmanCountBadge.textContent = `${selLaneSwords}/${swordCap()}`;
+            const aCost = document.getElementById('archerCostText');
+            const sCost = document.getElementById('swordCostText');
+            if (aCost) aCost.textContent = unitCost('archer');
+            if (sCost) sCost.textContent = unitCost('swordsman');
 
-            const archerLocked = game.deployment !== null || game.gold < UNITS.archer.cost || selTowerArchers >= UNITS.archer.maxPerTower;
-            const swordLocked = game.deployment !== null || game.gold < UNITS.swordsman.cost;
+            const archerLocked = game.deployment !== null || game.gold < unitCost('archer') || selTowerArchers >= UNITS.archer.maxPerTower;
+            const swordLocked = game.deployment !== null || game.gold < unitCost('swordsman') || selLaneSwords >= swordCap();
 
             if (archerBtn) archerBtn.classList.toggle('locked-card', archerLocked);
             if (swordsmanBtn) swordsmanBtn.classList.toggle('locked-card', swordLocked);
@@ -3900,6 +3933,14 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const top = (tops[en.type] || 40) * scale;
             const barW = (isBoss ? 58 : ((isOgre || en.type === 'ram') ? 34 : 24)) * scale;
 
+            if (en.elite) {
+                const pulse = 0.5 + 0.5 * Math.sin(t * 5 + ph);
+                c.save();
+                c.shadowColor = '#fbbf24'; c.shadowBlur = 12 * scale;
+                ell(c, x, y - 2 * scale, (15 + (isOgre ? 8 : 0)) * scale, (7 + (isOgre ? 3 : 0)) * scale);
+                paint(c, `rgba(251, 191, 36, ${(0.15 + 0.12 * pulse).toFixed(2)})`, '#fbbf24', 2.4 * scale);
+                c.restore();
+            }
             if (en.burn > 0) {
                 // Fire Arrows: flickering flame
                 const fl = Math.sin(t * 22 + ph);
@@ -3920,7 +3961,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 paint(c, null, '#4ade80', 3 * scale);
                 c.restore();
             }
-            drawHealthBar(c, x, y - top, barW, en.hp / en.maxHp, isBoss ? '#c084fc' : '#ef4444', scale);
+            drawHealthBar(c, x, y - top, barW, en.hp / en.maxHp, isBoss ? '#c084fc' : (en.elite ? '#fbbf24' : '#ef4444'), scale);
         }
 
         function drawHolographicDeploymentGhost(c, geom, dep) {
