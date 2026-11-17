@@ -55,7 +55,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
   Battering Ram (ignores swordsmen, heavy gate damage), Ogre Warlord (boss).
 * BOONS: after every odd wave pick one of three stackable perks. ABILITIES: Arrow Volley [E]
   and Rally [R] on the selected road, on cooldowns. OBJECTIVES: bonus gold for taking no castle
-  damage and for beating the wave's par time. ENDLESS MODE after wave 40, best run recorded.
+  damage and for beating the wave's par time. The siege never ends; the best run is recorded.
 * UPGRADES (Levels 1-25, bought with gold from 150g, rising each level, keys [C] / [V]):
   * Archer levels add damage, fire rate and quiver size; Swordsman levels add damage and HP.
     Each level applies to every unit of that type already on the field and all future ones.
@@ -63,7 +63,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 4. ENEMY ARCHETYPES, WAVES & GOLD ECONOMY
 =========================================
 * Starting Gold: 200g | Passive Castle Income: +4g/sec | Wave Clear Bonus: +75g + Castle Heal
-* Enemy Types (40 Escalating Waves):
+* Enemy Types (ENDLESS waves: no final wave, every wave is harder than the last):
   1) GOBLIN SCOUT (Bounty: +25g): Fast green runner, low HP, no arrow resistance.
   2) SHIELD ORC (Bounty: +45g): Armored warrior carrying a heavy iron shield that blocks
      75% of arrow damage (`arrowResist = 0.75`) until a Swordsman strikes it in melee,
@@ -349,7 +349,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 <!-- Wave Pill -->
                 <div class="hud-pill px-2.5 sm:px-3.5 py-1.5 flex items-center">
                     <span class="font-cartoon text-white text-xs sm:text-base">
-                        <span class="lbl-full">WAVE </span><span class="lbl-short">W</span><span id="waveText" class="text-amber-300">1</span>&nbsp;/&nbsp;<span id="waveMaxText">40</span>
+                        <span class="lbl-full">WAVE </span><span class="lbl-short">W</span><span id="waveText" class="text-amber-300">1</span>
                     </span>
                 </div>
 
@@ -1037,7 +1037,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             intermission: true,   // true until the first enemy of the wave spawns
             waveTime: 0,
             waveDamage: 0,
-            endless: false,
+            endless: true,
             bolts: [],
             selectedLane: 0, // 0: NW, 1: NE, 2: SW, 3: SE
             deployment: null, // { type, lane, remaining, total } - strict one-at-a-time lock
@@ -1335,12 +1335,17 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             pulseGoldBadge();
         }
 
+        let bestWaveCache = null;
         function readBestWave() {
-            try { return Math.max(0, Math.floor(Number(localStorage.getItem(BEST_WAVE_KEY)) || 0)); } catch (e) { return 0; }
+            if (bestWaveCache === null) {
+                try { bestWaveCache = Math.max(0, Math.floor(Number(localStorage.getItem(BEST_WAVE_KEY)) || 0)); } catch (e) { bestWaveCache = 0; }
+            }
+            return bestWaveCache;
         }
 
         function recordBestWave(waveNum) {
             if (waveNum > readBestWave()) {
+                bestWaveCache = waveNum;
                 try { localStorage.setItem(BEST_WAVE_KEY, String(waveNum)); } catch (e) {}
             }
         }
@@ -1482,7 +1487,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             game.intermission = true;
             game.waveTime = 0;
             game.waveDamage = 0;
-            game.endless = false;
+            game.endless = true;   // no final wave: the siege only ever gets harder
             game.bolts = [];
             applyUnitLevels();
             game.selectedLane = 0;
@@ -1601,7 +1606,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
                 game.maxCastleHp = Math.max(1000, Math.min(20000, Number(data.maxCastleHp) || 1000));
                 game.castleHp = Math.min(game.maxCastleHp, Math.max(1, hp));
-                game.endless = Boolean(data.endless);
+                game.endless = true;
                 game.perks = {};
                 if (data.perks && typeof data.perks === 'object') {
                     Object.keys(PERKS).forEach((id) => {
@@ -1859,7 +1864,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     }
                     const cfg = ENEMY_TYPES[nextSpawn.type] || ENEMY_TYPES.goblin;
                     const wv = game.wave - 1;
-                    const waveHpScale = 1 + wv * 0.14 + wv * wv * 0.004;
+                    // Past wave 40 the horde toughens faster still, so no build can coast forever
+                    const waveHpScale = (1 + wv * 0.14 + wv * wv * 0.004) * (1 + Math.max(0, wv - 39) * 0.04);
                     const waveDmgScale = 1 + wv * 0.03;
                     const scaledHp = Math.round(cfg.hp * waveHpScale);
                     const lateral = (Math.random() - 0.5) * 18 * geom.scale;
@@ -2299,7 +2305,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             const rw = waveRewards(game.wave);
             let chipHtml;
             if (game.intermission) {
-                chipHtml = `<span class="hot">NEXT: ${info.name}</span> \u00B7 ${roads} \u00B7 in ${Math.max(0, Math.ceil(game.spawnTimer))}s`;
+                chipHtml = `<span class="hot">NEXT: ${info.name}</span> \u00B7 ${roads} \u00B7 in ${Math.max(0, Math.ceil(game.spawnTimer))}s` +
+                    (readBestWave() > 0 ? ` \u00B7 BEST ${readBestWave()}` : '');
             } else {
                 const flawless = game.waveDamage <= 0;
                 const swift = game.waveTime <= info.par;
