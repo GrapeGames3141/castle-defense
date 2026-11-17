@@ -45,14 +45,17 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
   * Selecting a lane displays an animated dashed cyan/gold firing corridor from its corner
     tower down its connected bridge and road up to maximum archer range.
 * SWORDSMAN (Cost: 75g | Deploy Time: 3.0s | HP: 135 | Melee Damage: 22):
-  * Spawns at the castle gate of the selected lane, marches onto the arched moat bridge to
-    a defensive guard post (`dist = 0.34`), blocks advancing enemies on that lane in melee
-    combat, and shatters enemy shields on contact (`enemy.arrowResist = 0`).
+  * Spawns at the castle gate of the selected lane, marches across the bridge and out along
+    the whole road to a forward post near its far end (`dist = 0.86`), charges any enemy on
+    that lane, blocks it in melee, and shatters shields on contact (`enemy.arrowResist = 0`).
+* UPGRADES (Levels 1-6, bought with gold: 150 / 300 / 500 / 750 / 1050g, keys [C] / [V]):
+  * Archer levels add damage, fire rate and quiver size; Swordsman levels add damage and HP.
+    Each level applies to every unit of that type already on the field and all future ones.
 
 4. ENEMY ARCHETYPES, WAVES & GOLD ECONOMY
 =========================================
 * Starting Gold: 200g | Passive Castle Income: +4g/sec | Wave Clear Bonus: +75g + Castle Heal
-* Enemy Types (20 Escalating Waves):
+* Enemy Types (40 Escalating Waves):
   1) GOBLIN SCOUT (Bounty: +25g): Fast green runner, low HP, no arrow resistance.
   2) SHIELD ORC (Bounty: +45g): Armored warrior carrying a heavy iron shield that blocks
      75% of arrow damage (`arrowResist = 0.75`) until a Swordsman strikes it in melee,
@@ -172,6 +175,69 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             -webkit-user-select: text;
             touch-action: pan-y;
         }
+        /* ---------- Bottom docks: unit cards, upgrade buttons, lane pills ---------- */
+        #bottomBar {
+            position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+            pointer-events: none; padding: 10px;
+            display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
+        }
+        .unit-dock { pointer-events: auto; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+        #laneDock {
+            position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
+            display: flex; flex-direction: column; align-items: center;
+            pointer-events: none; white-space: nowrap; margin-bottom: -2px;
+        }
+        .upgrade-btn {
+            pointer-events: auto; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 4px 10px; border-radius: 12px;
+            background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 55%, #b45309 100%);
+            border: 3px solid #111827;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.45);
+            color: #fff; font-size: 12px; line-height: 1.1;
+            transition: transform 0.08s ease, filter 0.12s ease;
+        }
+        .upgrade-btn:active:not(.locked-upg) { transform: translateY(2px); }
+        .upgrade-btn.locked-upg { filter: saturate(0.35) brightness(0.72); cursor: not-allowed; }
+        .upgrade-btn .upg-arrow { font-size: 14px; }
+        .lbl-short { display: none; }
+
+        /* ---------- Landscape: HUD sits in the open meadow between the roads ---------- */
+        body.land #topHudRow { justify-content: center; flex-wrap: nowrap; }
+        body.land .lbl-full { display: none; }
+        body.land .lbl-short { display: inline; }
+        body.land #hpPill { min-width: 180px; }
+        body.land.short #hpPill { min-width: 118px; }
+        body.land.short #topHud { padding: 6px; }
+        body.land.short #topHudRow, body.land.short #topHudRight { gap: 4px; }
+        body.land #statusPill { display: none; }
+        body.land.wide #statusPill { display: flex; flex: 0 0 250px; min-width: 0; }
+        body.land .unit-dock {
+            position: fixed; top: 50%; transform: translateY(-50%);
+            flex-direction: row; gap: 5px;
+        }
+        body.land #dockArcher { left: 8px; flex-direction: column-reverse; }
+        body.land #dockSword { right: 8px; flex-direction: column-reverse; }
+        body.land.short #dockArcher { flex-direction: row-reverse; }
+        body.land.short #dockSword { flex-direction: row; }
+        body.land.short .hp-lbl { display: none; }
+        body.land.short #hpPill > div:last-child { min-width: 62px; }
+        body.land #laneDock { position: fixed; bottom: 8px; margin: 0; }
+        body.land #bottomHintBanner { display: none; }
+        body.land .unit-card { min-width: 0; padding: 6px 9px; gap: 8px; border-radius: 15px; }
+        body.land .unit-card .unit-icon-box { width: 42px; height: 42px; }
+        body.land .unit-card .unit-icon-box svg { width: 32px; height: 32px; }
+        body.land .unit-card .card-name { font-size: 15px; }
+        body.land .unit-card .card-cost { font-size: 13px; }
+        body.land .unit-card .card-extra, body.land .unit-card .card-key { display: none; }
+        body.land.short .unit-card .card-name { font-size: 13px; }
+        body.land.short .unit-card .card-cost { font-size: 12px; }
+        body.land.short .unit-card .unit-icon-box { width: 36px; height: 36px; }
+        body.land.short .unit-card .unit-icon-box svg { width: 28px; height: 28px; }
+        body.land .upgrade-btn { padding: 3px 7px; font-size: 11px; }
+        body.land.short .upgrade-btn { flex-direction: column; gap: 1px; padding: 4px 7px; }
+        body.land .upgrade-btn .upg-word { display: none; }
+        @media (max-width: 480px) { .unit-card .card-extra { display: none; } }
         @keyframes goldPop {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.13); }
@@ -187,11 +253,11 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
     <canvas id="gameCanvas"></canvas>
 
     <!-- TOP HUD OVERLAY (MATCHING CONCEPT ART + QUICK CONTROLS) -->
-    <div class="fixed top-0 left-0 right-0 z-20 pointer-events-none p-2 sm:p-3 flex flex-col gap-1.5">
-        <div class="w-full max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+    <div id="topHud" class="fixed top-0 left-0 right-0 z-20 pointer-events-none p-2 sm:p-3 flex flex-col gap-1.5">
+        <div id="topHudRow" class="w-full max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
 
             <!-- TOP-LEFT: HEART + CASTLE HP BAR -->
-            <div class="hud-pill px-2.5 py-1.5 flex items-center gap-2 pointer-events-auto min-w-[190px] sm:min-w-[230px]">
+            <div id="hpPill" class="hud-pill px-2.5 py-1.5 flex items-center gap-2 pointer-events-auto min-w-[190px] sm:min-w-[230px]">
                 <div class="relative -ml-1 flex-shrink-0">
                     <svg class="w-8 h-8 sm:w-9 sm:h-9 drop-shadow" viewBox="0 0 36 36">
                         <path d="M18 32 C18 32 4 23 4 12 C4 6.5 8.5 3 13 3 C15.8 3 17.3 4.5 18 6 C18.7 4.5 20.2 3 23 3 C27.5 3 32 6.5 32 12 C32 23 18 32 18 32 Z"
@@ -203,13 +269,13 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     <div id="castleHpBar" class="h-full transition-all duration-200"
                          style="width: 100%; background: linear-gradient(180deg, #f87171 0%, #dc2626 55%, #991b1b 100%);"></div>
                     <div class="absolute inset-0 flex items-center justify-center font-cartoon text-white text-xs sm:text-sm tracking-wide">
-                        CASTLE HP: <span id="castleHpText" class="ml-1">100%</span>
+                        <span class="lbl-full">CASTLE&nbsp;</span><span class="hp-lbl">HP:</span> <span id="castleHpText" class="ml-1">100%</span>
                     </div>
                 </div>
             </div>
 
             <!-- TOP-CENTER: ONE-AT-A-TIME DEPLOYMENT / WAVE STATUS BAR -->
-            <div class="hud-pill px-2.5 py-1.5 hidden lg:flex items-center flex-1 min-w-[170px] max-w-[380px] pointer-events-auto">
+            <div id="statusPill" class="hud-pill px-2.5 py-1.5 hidden lg:flex items-center flex-1 min-w-[170px] max-w-[380px] pointer-events-auto">
                 <div class="relative w-full h-6 sm:h-7 bg-slate-950 rounded-lg border-2 border-slate-900 overflow-hidden">
                     <div id="centerStatusBar" class="h-full transition-all duration-75"
                          style="width: 100%; background: linear-gradient(180deg, #f87171 0%, #dc2626 55%, #991b1b 100%);"></div>
@@ -220,7 +286,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             </div>
 
             <!-- TOP-RIGHT: GOLD BAG + WAVE COUNTER + RESET + QUICK PAUSE READER -->
-            <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+            <div id="topHudRight" class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
                 <!-- Gold Pill -->
                 <div id="goldBadge" class="hud-pill px-2.5 sm:px-3.5 py-1.5 flex items-center gap-1.5">
                     <svg class="w-6 h-6 sm:w-7 sm:h-7 flex-shrink-0" viewBox="0 0 32 32">
@@ -230,33 +296,33 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         <circle cx="16" cy="20" r="4.5" fill="#fbbf24" stroke="#111827" stroke-width="1.6"/>
                     </svg>
                     <span class="font-cartoon text-amber-300 text-xs sm:text-base">
-                        GOLD: <span id="goldText" class="text-white">200</span>
+                        <span class="lbl-full">GOLD: </span><span id="goldText" class="text-white">200</span>
                     </span>
                 </div>
 
                 <!-- Wave Pill -->
                 <div class="hud-pill px-2.5 sm:px-3.5 py-1.5 flex items-center">
                     <span class="font-cartoon text-white text-xs sm:text-base">
-                        WAVE <span id="waveText" class="text-amber-300">1</span> / 20
+                        <span class="lbl-full">WAVE </span><span class="lbl-short">W</span><span id="waveText" class="text-amber-300">1</span>&nbsp;/&nbsp;<span id="waveMaxText">40</span>
                     </span>
                 </div>
 
                 <!-- Sound Toggle -->
                 <button id="muteBtn" onclick="toggleAudioMute()" title="Toggle Sound Effects"
                         class="hud-pill px-2.5 py-1.5 text-white hover:text-amber-300 active:translate-y-0.5 text-xs sm:text-sm font-cartoon-sm">
-                    <span id="muteLabel">SFX ON</span>
+                    <span id="muteLabel" class="lbl-full">SFX ON</span><span id="muteIcon" class="lbl-short">&#128266;</span>
                 </button>
 
                 <!-- Reset Battle Button -->
                 <button onclick="resetNewBattle()" title="Start Fresh Battle"
                         class="hud-pill px-2.5 py-1.5 text-rose-300 hover:text-white active:translate-y-0.5 text-xs sm:text-sm font-cartoon-sm">
-                    RESET
+                    <span class="lbl-full">RESET</span><span class="lbl-short">&#8634;</span>
                 </button>
 
                 <!-- Quick-Pause / Workplace Tech Reader Trigger -->
                 <button onclick="openWorkplaceReader()" title="Quick Pause & Open KeyTrainSecure.com Tech Briefs (P / Esc / `)"
                         class="hud-pill px-2.5 sm:px-3 py-1.5 bg-sky-900 border-sky-400 text-sky-200 hover:text-white active:translate-y-0.5 flex items-center gap-1 text-xs sm:text-sm font-cartoon-sm">
-                    <span>PAUSE [P]</span>
+                    <span class="lbl-full">PAUSE [P]</span><span class="lbl-short">&#10074;&#10074;</span>
                 </button>
             </div>
         </div>
@@ -264,11 +330,17 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
     </div>
 
     <!-- BOTTOM TACTICAL DEPLOYMENT CARDS (ONE-CLICK DEPLOY TO LAST SELECTED LANE) -->
-    <div class="fixed bottom-0 left-0 right-0 z-20 pointer-events-none p-2.5 sm:p-4 flex items-end justify-between">
+    <div id="bottomBar">
 
         <!-- BOTTOM-LEFT: ARCHER DEPLOYMENT CARD -->
-        <button id="archerCardBtn" onclick="deployUnitToSelectedLane('archer')"
-                class="unit-card pointer-events-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 sm:gap-3.5 text-left min-w-[168px] sm:min-w-[235px]">
+        <div id="dockArcher" class="unit-dock">
+            <button id="archerUpgradeBtn" onclick="upgradeUnit('archer')" class="upgrade-btn font-cartoon-sm" title="Upgrade all archers [C]">
+                <span class="upg-arrow">&#9650;</span>
+                <span><span class="upg-word">UPGRADE </span>LV <span id="archerLevelText">1</span></span>
+                <span id="archerUpgradeCost" class="text-amber-100">150g</span>
+            </button>
+            <button id="archerCardBtn" onclick="deployUnitToSelectedLane('archer')"
+                class="unit-card pointer-events-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 sm:gap-3.5 text-left min-w-[168px] sm:min-w-[220px]">
             <div class="unit-icon-box w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center flex-shrink-0 relative">
                 <svg class="w-9 h-9 sm:w-11 sm:h-11" viewBox="0 0 48 48">
                     <path d="M15 8 C29 13 29 35 15 40" fill="none" stroke="#d97706" stroke-width="4" stroke-linecap="round"/>
@@ -282,21 +354,22 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 </span>
             </div>
             <div class="flex flex-col leading-tight">
-                <div class="font-cartoon text-white text-base sm:text-xl flex items-center gap-1.5">
+                <div class="card-name font-cartoon text-white text-base sm:text-xl flex items-center gap-1.5">
                     <span>ARCHER</span>
-                    <span class="hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[Z]</span>
+                    <span class="card-key hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[Z]</span>
                 </div>
-                <div class="font-cartoon text-amber-300 text-xs sm:text-base">
+                <div class="card-cost font-cartoon text-amber-300 text-xs sm:text-base">
                     Cost: 50g
                 </div>
-                <div class="font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
+                <div class="card-extra font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
                     ⏱ 1.5s • Lane-Locked
                 </div>
             </div>
         </button>
+        </div>
 
         <!-- BOTTOM-CENTER: SELECTED LANE & DEPLOYMENT FEEDBACK PILL -->
-        <div class="absolute left-1/2 -translate-x-1/2 bottom-full lg:static lg:translate-x-0 flex flex-col items-center pointer-events-none lg:mb-1 min-w-0 px-1.5 whitespace-nowrap">
+        <div id="laneDock">
         <!-- COMPACT SUB-BAR: LANE SELECTION PILLS (1-4) & STATUS -->
         <div class="flex items-center justify-center gap-1 sm:gap-1.5 pointer-events-auto mb-1.5">
             <span class="hidden sm:inline text-[11px] sm:text-xs font-cartoon-sm text-amber-200 bg-black/60 px-2 py-0.5 rounded-full border border-white/15">
@@ -320,23 +393,29 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             </button>
         </div>
             <div id="bottomHintBanner"
-                 class="hidden lg:block bg-slate-950/85 border-2 border-sky-400/70 rounded-full px-4 py-1.5 text-xs font-cartoon-sm text-sky-200 shadow-lg">
+                 class="hidden xl:block bg-slate-950/85 border-2 border-sky-400/70 rounded-full px-4 py-1.5 text-xs font-cartoon-sm text-sky-200 shadow-lg">
                 Tap a road ring to select lane • Tap Archer or Swordsman to deploy
             </div>
         </div>
 
         <!-- BOTTOM-RIGHT: SWORDSMAN DEPLOYMENT CARD -->
-        <button id="swordsmanCardBtn" onclick="deployUnitToSelectedLane('swordsman')"
-                class="unit-card pointer-events-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 sm:gap-3.5 text-left min-w-[175px] sm:min-w-[245px]">
+        <div id="dockSword" class="unit-dock">
+            <button id="swordsmanUpgradeBtn" onclick="upgradeUnit('swordsman')" class="upgrade-btn font-cartoon-sm" title="Upgrade all swordsmans [V]">
+                <span class="upg-arrow">&#9650;</span>
+                <span><span class="upg-word">UPGRADE </span>LV <span id="swordsmanLevelText">1</span></span>
+                <span id="swordsmanUpgradeCost" class="text-amber-100">150g</span>
+            </button>
+            <button id="swordsmanCardBtn" onclick="deployUnitToSelectedLane('swordsman')"
+                class="unit-card pointer-events-auto px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 sm:gap-3.5 text-left min-w-[175px] sm:min-w-[230px]">
             <div class="flex flex-col leading-tight text-right sm:text-left">
-                <div class="font-cartoon text-white text-base sm:text-xl flex items-center justify-end sm:justify-start gap-1.5">
+                <div class="card-name font-cartoon text-white text-base sm:text-xl flex items-center justify-end sm:justify-start gap-1.5">
                     <span>SWORDSMAN</span>
-                    <span class="hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[X]</span>
+                    <span class="card-key hidden sm:inline text-[10px] sm:text-xs bg-black/45 px-1.5 py-0.5 rounded text-amber-300">[X]</span>
                 </div>
-                <div class="font-cartoon text-amber-300 text-xs sm:text-base">
+                <div class="card-cost font-cartoon text-amber-300 text-xs sm:text-base">
                     Cost: 75g
                 </div>
-                <div class="font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
+                <div class="card-extra font-cartoon-sm text-sky-100 text-[11px] sm:text-xs mt-0.5">
                     ⏱ 3.0s • Breaks Shields
                 </div>
             </div>
@@ -353,6 +432,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 </span>
             </div>
         </button>
+        </div>
     </div>
 
     <!-- VICTORY / DEFEAT MODAL OVERLAY -->
@@ -365,7 +445,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             <div class="grid grid-cols-3 gap-2 mb-6 bg-slate-950/90 p-3 rounded-xl border border-slate-800">
                 <div>
                     <div class="text-[11px] text-slate-400 uppercase font-bold">Wave Reached</div>
-                    <div id="endStatWave" class="font-cartoon text-xl text-white">20 / 20</div>
+                    <div id="endStatWave" class="font-cartoon text-xl text-white">40 / 40</div>
                 </div>
                 <div>
                     <div class="text-[11px] text-slate-400 uppercase font-bold">Enemies Slain</div>
@@ -685,9 +765,66 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 damage: 22,
                 attackInterval: 0.85,
                 speed: 0.20,
-                guardDist: 0.34
+                guardDist: 0.86
             }
         };
+
+        // Gold-bought upgrades: every level strengthens all current and future units of that type
+        const MAX_UNIT_LEVEL = 6;
+        const UPGRADE_COSTS = [150, 300, 500, 750, 1050];
+        const BASE_STATS = {
+            archer: { damage: UNITS.archer.damage, fireInterval: UNITS.archer.fireInterval, maxAmmo: UNITS.archer.maxAmmo },
+            swordsman: { damage: UNITS.swordsman.damage, hp: UNITS.swordsman.hp }
+        };
+        const LEVEL_COLORS = ['#3b82f6', '#22c55e', '#f2c94c', '#f97316', '#ef4444', '#e879f9'];
+
+        function applyUnitLevels() {
+            const al = game.levels.archer - 1;
+            const sl = game.levels.swordsman - 1;
+            UNITS.archer.damage = Math.round(BASE_STATS.archer.damage * (1 + 0.35 * al));
+            UNITS.archer.fireInterval = BASE_STATS.archer.fireInterval * Math.pow(0.94, al);
+            UNITS.archer.maxAmmo = BASE_STATS.archer.maxAmmo + 6 * al;
+            UNITS.swordsman.damage = Math.round(BASE_STATS.swordsman.damage * (1 + 0.35 * sl));
+            UNITS.swordsman.hp = UNITS.swordsman.maxHp = Math.round(BASE_STATS.swordsman.hp * (1 + 0.4 * sl));
+        }
+
+        function upgradeCost(unitType) {
+            const lv = game.levels[unitType];
+            return lv >= MAX_UNIT_LEVEL ? null : UPGRADE_COSTS[lv - 1];
+        }
+
+        function upgradeUnit(unitType) {
+            if (game.paused || game.gameOver || game.victory || !game.levels[unitType]) return;
+            const cost = upgradeCost(unitType);
+            const geom = computeBattlefieldGeometry(canvas.width, canvas.height);
+            const ty = geom.cy - 120 * geom.scale;
+            if (cost === null) {
+                sfx.playError();
+                addFloatingText('MAX LEVEL!', geom.cx, ty, '#fbbf24', 16);
+                return;
+            }
+            if (game.gold < cost) {
+                sfx.playError();
+                addFloatingText(`NEED ${cost} GOLD!`, geom.cx, ty, '#f87171', 16);
+                return;
+            }
+            game.gold -= cost;
+            game.levels[unitType] += 1;
+            applyUnitLevels();
+            if (unitType === 'archer') {
+                // Fresh quivers for everyone already on the towers
+                game.archers.forEach(list => list.forEach(a => { a.ammo = UNITS.archer.maxAmmo; }));
+            } else {
+                game.swordsmen.forEach(sw => { sw.maxHp = UNITS.swordsman.maxHp; sw.hp = sw.maxHp; });
+            }
+            sfx.playSpawned();
+            addFloatingText(`${UNITS[unitType].name}S LEVEL ${game.levels[unitType]}!`, geom.cx, ty, '#fde047', 19);
+            for (let i = 0; i < 4; i++) {
+                spawnBurstParticles(geom.lanes[i].towerX, geom.lanes[i].towerY - 10, '#fde047', 8);
+            }
+            saveGameState();
+            updateHudDom();
+        }
 
         const ENEMY_TYPES = {
             goblin: {
@@ -779,6 +916,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             sfx.muted = !sfx.muted;
             const lbl = document.getElementById('muteLabel');
             if (lbl) lbl.textContent = sfx.muted ? 'SFX OFF' : 'SFX ON';
+            const ico = document.getElementById('muteIcon');
+            if (ico) ico.innerHTML = sfx.muted ? '&#128263;' : '&#128266;';
         }
 
         // ------------------------------------------------------------------------------------
@@ -794,7 +933,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             gold: 200,
             passiveGoldAccum: 0,
             wave: 1,
-            maxWaves: 20,
+            maxWaves: 40,
+            levels: { archer: 1, swordsman: 1 },
             selectedLane: 0, // 0: NW, 1: NE, 2: SW, 3: SE
             deployment: null, // { type, lane, remaining, total } - strict one-at-a-time lock
             archers: [[], [], [], []], // Strict lane-locked towers: archers[laneIdx]
@@ -853,6 +993,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             { ax: 0,  ay: -1, lx: 1,  ly: 0  }   // 3: SE
         ];
         let geomCache = {};
+        // Space (in canvas px) the side docks occupy in landscape; applies to the live canvas only
+        const hudInsets = { side: 0 };
 
         function computeBattlefieldGeometry(w, h) {
             const key = w + 'x' + h;
@@ -861,7 +1003,10 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
             const cx = w * 0.5;
             const cy = h * 0.5;
-            const scale = Math.max(0.25, Math.min(w / 780, h / 560));
+            const live = (w === canvas.width && h === canvas.height);
+            let scale = Math.min(w / 780, h / 560);
+            if (live && hudInsets.side > 0) scale = Math.min(scale, (w * 0.5 - hudInsets.side) / 312);
+            scale = Math.max(0.25, scale);
             const slope = Math.max(0.52, Math.min(0.72, (h / w) * 1.06));
             const A = scale;
             const B = scale * slope;
@@ -970,6 +1115,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             game.gold = 200;
             game.passiveGoldAccum = 0;
             game.wave = 1;
+            game.levels = { archer: 1, swordsman: 1 };
+            applyUnitLevels();
             game.selectedLane = 0;
             game.deployment = null;
             game.archers = [[], [], [], []]; // ZERO pre-placed archers
@@ -1010,7 +1157,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                     timestamp: Date.now(),
                     castleHp: Number(game.castleHp) || 1000,
                     gold: Math.floor(Number(game.gold) || 0),
-                    wave: Math.max(1, Math.min(20, Number(game.wave) || 1)),
+                    wave: Math.max(1, Math.min(game.maxWaves, Number(game.wave) || 1)),
+                    levels: { archer: game.levels.archer, swordsman: game.levels.swordsman },
                     selectedLane: [0, 1, 2, 3].includes(game.selectedLane) ? game.selectedLane : 0,
                     totalKills: Number(game.totalKills) || 0,
                     deployment: game.deployment ? {
@@ -1034,11 +1182,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             dist: Math.max(0.05, Math.min(0.95, Number(s.dist) || 0.25)),
                             hp: Math.max(1, Number(s.hp) || UNITS.swordsman.hp),
                             maxHp: UNITS.swordsman.maxHp,
+                            guardDist: Number(s.guardDist) || UNITS.swordsman.guardDist,
                             lateral: Number(s.lateral) || 0
                         }))
                         : [],
                     enemies: Array.isArray(game.enemies)
-                        ? game.enemies.slice(0, 40).map(e => ({
+                        ? game.enemies.slice(0, 90).map(e => ({
                             type: ENEMY_TYPES[e.type] ? e.type : 'goblin',
                             lane: [0, 1, 2, 3].includes(e.lane) ? e.lane : 0,
                             dist: Math.max(0.08, Math.min(1.05, Number(e.dist) || 0.85)),
@@ -1049,7 +1198,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             lateral: Number(e.lateral) || 0
                         }))
                         : [],
-                    waveQueue: Array.isArray(game.waveQueue) ? game.waveQueue.slice(0, 80) : []
+                    waveQueue: Array.isArray(game.waveQueue) ? game.waveQueue.slice(0, 160) : []
                 };
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
             } catch (e) {}
@@ -1072,7 +1221,10 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
 
                 game.castleHp = Math.min(game.maxCastleHp, Math.max(1, hp));
                 game.gold = Math.max(0, Math.min(99999, Math.floor(Number(data.gold) || 200)));
-                game.wave = Math.max(1, Math.min(20, Math.floor(Number(data.wave) || 1)));
+                game.wave = Math.max(1, Math.min(game.maxWaves, Math.floor(Number(data.wave) || 1)));
+                const lv = (v) => Math.max(1, Math.min(MAX_UNIT_LEVEL, Math.floor(Number(v) || 1)));
+                game.levels = { archer: lv(data.levels && data.levels.archer), swordsman: lv(data.levels && data.levels.swordsman) };
+                applyUnitLevels();
                 game.selectedLane = [0, 1, 2, 3].includes(data.selectedLane) ? data.selectedLane : 0;
                 game.totalKills = Math.max(0, Math.floor(Number(data.totalKills) || 0));
 
@@ -1098,13 +1250,14 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                         maxHp: UNITS.swordsman.maxHp,
                         cooldown: 0.2,
                         attackAnim: 0,
+                        guardDist: Math.max(0.3, Math.min(0.9, Number(s.guardDist) || UNITS.swordsman.guardDist)),
                         lateral: Number(s.lateral) || 0
                     }))
                     : [];
 
                 // Hydrate road enemies
                 game.enemies = Array.isArray(data.enemies)
-                    ? data.enemies.slice(0, 40).map(e => {
+                    ? data.enemies.slice(0, 90).map(e => {
                         const cfg = ENEMY_TYPES[e.type] || ENEMY_TYPES.goblin;
                         return {
                             type: cfg.type,
@@ -1240,7 +1393,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                 game.swordsmen.push({
                     lane: laneIdx,
                     dist: 0.14,
-                    guardDist: Math.min(0.45, UNITS.swordsman.guardDist + (sameLaneCount % 3) * 0.035),
+                    guardDist: UNITS.swordsman.guardDist - (sameLaneCount % 4) * 0.045,
                     hp: UNITS.swordsman.hp,
                     maxHp: UNITS.swordsman.maxHp,
                     cooldown: 0.1,
@@ -1473,12 +1626,12 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
                             addFloatingText('SHIELD BROKEN!', pt.x, pt.y - 42, '#38bdf8', 14);
                         }
                     }
-                } else if (laneEnemy && laneEnemy.dist < sw.guardDist + 0.16) {
-                    // Step toward enemy near the bridge
+                } else if (laneEnemy) {
+                    // Charge the nearest enemy anywhere on this road (even one that slipped past)
                     const dir = Math.sign(laneEnemy.dist - sw.dist);
-                    sw.dist += dir * UNITS.swordsman.speed * dt;
+                    sw.dist = Math.max(0.1, Math.min(0.93, sw.dist + dir * UNITS.swordsman.speed * dt));
                 } else {
-                    // March toward assigned bridge guard post
+                    // March out to a forward post near the far end of the road
                     const targetDist = sw.guardDist || UNITS.swordsman.guardDist;
                     if (Math.abs(targetDist - sw.dist) > 0.01) {
                         sw.dist += Math.sign(targetDist - sw.dist) * UNITS.swordsman.speed * dt;
@@ -1664,6 +1817,18 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             if (archerBtn) archerBtn.classList.toggle('locked-card', archerLocked);
             if (swordsmanBtn) swordsmanBtn.classList.toggle('locked-card', swordLocked);
 
+            ['archer', 'swordsman'].forEach((type) => {
+                const cost = upgradeCost(type);
+                const btn = document.getElementById(`${type}UpgradeBtn`);
+                const lvTxt = document.getElementById(`${type}LevelText`);
+                const costTxt = document.getElementById(`${type}UpgradeCost`);
+                if (lvTxt) lvTxt.textContent = cost === null ? 'MAX' : `${game.levels[type]}`;
+                if (costTxt) costTxt.textContent = cost === null ? '' : `${cost}g`;
+                if (btn) btn.classList.toggle('locked-upg', cost === null || game.gold < cost);
+            });
+            const waveMaxTxt = document.getElementById('waveMaxText');
+            if (waveMaxTxt) waveMaxTxt.textContent = `${game.maxWaves}`;
+
             const bottomBanner = document.getElementById('bottomHintBanner');
             if (bottomBanner) {
                 if (game.deployment) {
@@ -1694,7 +1859,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             }
             if (sub) {
                 sub.textContent = isVictory
-                    ? 'All 20 waves of the siege have been repelled across all four roads!'
+                    ? 'All 40 waves of the siege have been repelled across all four roads!'
                     : 'Enemy forces overwhelmed the central keep. Regroup and fortify your lanes!';
             }
             if (statWave) statWave.textContent = `${game.wave} / ${game.maxWaves}`;
@@ -2803,7 +2968,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             rr(c, 0.6, -6, 3.4, 6, 1.4); paint(c, '#3b2d24', INK, 1.4);
             // Tunic
             rr(c, -5, -14.5, 10, 10, 3.2); paint(c, '#2f6fe0', INK, 1.6);
-            c.fillStyle = '#8a5a2b';
+            c.fillStyle = game.levels.archer > 1 ? LEVEL_COLORS[game.levels.archer - 1] : '#8a5a2b';
             c.fillRect(-4.6, -8.2, 9.2, 1.8);
             // Quiver on the back
             c.save();
@@ -2955,7 +3120,7 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             c.fillStyle = INK;
             rr(c, 0.4, -26.6, 6.2, 2.5, 1); c.fill();
             c.fillRect(2.6, -26, 1.2, 5);
-            ell(c, -0.5, -32.3, 2.3, 3); paint(c, '#3b82f6', INK, 1.4);
+            ell(c, -0.5, -32.3, 2.3, 3); paint(c, LEVEL_COLORS[game.levels.swordsman - 1] || '#3b82f6', INK, 1.4);
 
             // Kite shield
             c.beginPath();
@@ -3358,6 +3523,8 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
             else if (key === '2' || key === 'w') selectLane(1);
             else if (key === '3' || key === 'a') selectLane(2);
             else if (key === '4' || key === 's') selectLane(3);
+            else if (key === 'c') upgradeUnit('archer');
+            else if (key === 'v') upgradeUnit('swordsman');
             else if (key === 'z') deployUnitToSelectedLane('archer');
             else if (key === 'x' || key === ' ') {
                 e.preventDefault();
@@ -3489,11 +3656,40 @@ single self-contained HTML5 file for mobile touchscreens and desktop browsers.
         // ------------------------------------------------------------------------------------
         function resizeCanvas() {
             const dpr = Math.min(2, window.devicePixelRatio || 1);
-            canvas.width = Math.round((window.innerWidth || 960) * dpr);
-            canvas.height = Math.round((window.innerHeight || 640) * dpr);
+            const vw = window.innerWidth || 960;
+            const vh = window.innerHeight || 640;
+            canvas.width = Math.round(vw * dpr);
+            canvas.height = Math.round(vh * dpr);
+
+            // Landscape puts the HUD in the meadow between the roads; portrait keeps it top/bottom
+            const land = vw >= vh;
+            document.body.classList.toggle('land', land);
+            document.body.classList.toggle('short', land && vh < 520);
+            document.body.classList.toggle('wide', land && vw >= 1100);
+            hudInsets.side = 0;
+            if (land) {
+                const a = document.getElementById('dockArcher');
+                const b = document.getElementById('dockSword');
+                if (a && b) {
+                    const reach = Math.max(a.getBoundingClientRect().right, vw - b.getBoundingClientRect().left);
+                    hudInsets.side = (reach + 10) * dpr;
+                }
+            }
+            geomCache = {};
+            artCache = {};
         }
 
         window.addEventListener('resize', resizeCanvas);
+        // Dock sizes settle after styles/fonts load; re-fit the battlefield when they change
+        if (window.ResizeObserver) {
+            let lastDockW = -1;
+            const dockWatcher = new ResizeObserver(() => {
+                const el = document.getElementById('dockArcher');
+                const wNow = el ? Math.round(el.getBoundingClientRect().width) : 0;
+                if (wNow !== lastDockW) { lastDockW = wNow; resizeCanvas(); }
+            });
+            ['dockArcher', 'dockSword'].forEach(id => { const el = document.getElementById(id); if (el) dockWatcher.observe(el); });
+        }
         window.addEventListener('beforeunload', saveGameState);
 
         let lastFrameTime = performance.now();
